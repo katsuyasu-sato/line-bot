@@ -2,7 +2,7 @@
 // カツヤス｜50代の人生設計 LINE Bot
 // 機能: 自動返信・ウェルカムメッセージ・キーワード応答
 // ─────────────────────────────────────────────────────────
-require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
+require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 
