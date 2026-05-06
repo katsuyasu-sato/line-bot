@@ -195,8 +195,91 @@ function getReply(text) {
   // 【流入元】アロマ本・doTERRA
   if (text.includes('アロマ本') || text.includes('快眠') || text.includes('doTERRA') || text.includes('ドテラ')) {
     return {
-      type: 'text',
-      text: '🌿 アロマ・doTERRAの本から来てくれたか！\n\n建築士がアロマにハマった理由、\n本には書けなかった話をここでする。\n\nよろしくな。\nカツヤス',
+      type: 'flex',
+      altText: 'アロマ・doTERRAの本から来てくれたか！',
+      contents: {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '🌿 アロマ本を読んでくれたか！', weight: 'bold', size: 'md', color: '#2E7D32', wrap: true },
+            { type: 'separator', margin: 'md' },
+            {
+              type: 'text',
+              text: '建築士がアロマにハマった理由、\n本には書けなかった話をここでする。\n\nまずは無料のアロマアプリを使ってみてくれ。\n症状を選ぶだけで、おすすめオイルと使い方が出てくる。\n\nカツヤス',
+              wrap: true,
+              margin: 'md',
+              size: 'sm',
+            },
+          ],
+          paddingAll: '20px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'button',
+              action: { type: 'uri', label: '🌿 アロマアプリを使う（無料）', uri: 'https://friendly-licorice-3bab23.netlify.app' },
+              style: 'primary',
+              color: '#2E7D32',
+            },
+            {
+              type: 'button',
+              action: { type: 'uri', label: 'doTERRAで購入する', uri: 'https://office.doterra.com/katuyasusatou' },
+              style: 'secondary',
+              margin: 'sm',
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  // アロマアプリのプレゼント
+  if (text.includes('アロマ') || text.includes('アプリ') || text.includes('プレゼント')) {
+    return {
+      type: 'flex',
+      altText: 'アロマアプリをお受け取りください！',
+      contents: {
+        type: 'bubble',
+        hero: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '🌿 アロマケアガイド', weight: 'bold', size: 'xl', color: '#2E7D32' },
+            { type: 'text', text: 'doTERRAエッセンシャルオイル', size: 'sm', color: '#888888', margin: 'sm' },
+          ],
+          paddingAll: '20px',
+          backgroundColor: '#E8F5E9',
+        },
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'text',
+              text: '症状を選ぶだけでおすすめオイルと\n使い方が出てくる無料アプリだ。\n\n✅ 希釈方法・量も全部わかる\n✅ 加齢臭ケアのオイルも掲載\n✅ 購入リンクも完備',
+              wrap: true,
+              size: 'sm',
+            },
+          ],
+          paddingAll: '20px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'button',
+              action: { type: 'uri', label: '今すぐアプリを使う（無料）', uri: 'https://friendly-licorice-3bab23.netlify.app' },
+              style: 'primary',
+              color: '#2E7D32',
+            },
+          ],
+        },
+      },
     };
   }
 
@@ -276,7 +359,7 @@ function getReply(text) {
   // デフォルト返信
   return {
     type: 'text',
-    text: 'メッセージありがとうございます！\n\nどこから来てくれたか教えてほしい：\n\n「副業本」→ 副業で1000万の本を読んだ\n「アロマ本」→ doTERRA関連本を読んだ\n「インスタ」→ Instagramを見た\n「note」→ noteを読んだ\n「設計図」→ テンプレートがほしい\n「外壁修繕」→ 外壁修繕診断アプリを使った\n「相談」→ 個別相談したい\n\nカツヤス',
+    text: 'メッセージありがとうございます！\n\nどこから来てくれたか教えてほしい：\n\n「副業本」→ 副業で1000万の本を読んだ\n「アロマ本」→ doTERRA関連本を読んだ\n「アロマ」→ アロマアプリをもらいたい\n「インスタ」→ Instagramを見た\n「note」→ noteを読んだ\n「設計図」→ テンプレートがほしい\n「外壁修繕」→ 外壁修繕診断アプリを使った\n「相談」→ 個別相談したい\n\nカツヤス',
   };
 }
 
