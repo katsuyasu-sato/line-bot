@@ -31,11 +31,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
 // ── イベント処理 ────────────────────────────────────────
 async function handleEvent(event) {
-  // 友だち追加・ブロック解除 → ウェルカムメッセージ
+  // 友だち追加・ブロック解除 → プレゼント + キーワードメニュー（2通）
   if (event.type === 'follow') {
     return client.replyMessage({
       replyToken: event.replyToken,
-      messages: [welcomeMessage()],
+      messages: welcomeMessages(),
     });
   }
 
@@ -50,11 +50,88 @@ async function handleEvent(event) {
   }
 }
 
-// ── ウェルカムメッセージ ────────────────────────────────
-function welcomeMessage() {
+// ── ウェルカムメッセージ（2通送信） ───────────────────────
+function welcomeMessages() {
+  return [giftMessage(), keywordMenuMessage()];
+}
+
+function giftMessage() {
   return {
     type: 'flex',
-    altText: 'カツヤスのLINEへようこそ！',
+    altText: '【登録プレゼント】アロマケアアプリを受け取ってください',
+    contents: {
+      type: 'bubble',
+      hero: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: '🎁 登録プレゼント',
+            weight: 'bold',
+            size: 'xl',
+            color: '#2E7D32',
+          },
+          {
+            type: 'text',
+            text: 'doTERRA アロマケアガイドアプリ（無料）',
+            size: 'sm',
+            color: '#555555',
+            margin: 'sm',
+          },
+        ],
+        paddingAll: '20px',
+        backgroundColor: '#E8F5E9',
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: '友だち追加ありがとうございます！\n一級建築士カツヤスです。',
+            wrap: true,
+            size: 'md',
+            weight: 'bold',
+          },
+          {
+            type: 'separator',
+            margin: 'md',
+          },
+          {
+            type: 'text',
+            text: 'まず登録プレゼントを受け取ってください。\n\n症状や気分を選ぶだけで\nおすすめのオイルと使い方がわかる\n無料アプリです。\n\n✅ 希釈方法・量もすぐわかる\n✅ 加齢臭・疲労ケアも掲載\n✅ 購入リンクも完備',
+            wrap: true,
+            margin: 'md',
+            size: 'sm',
+          },
+        ],
+        paddingAll: '20px',
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'uri',
+              label: '🌿 アロマケアアプリを受け取る（無料）',
+              uri: 'https://friendly-licorice-3bab23.netlify.app',
+            },
+            style: 'primary',
+            color: '#2E7D32',
+          },
+        ],
+      },
+    },
+  };
+}
+
+function keywordMenuMessage() {
+  return {
+    type: 'flex',
+    altText: 'どこから来たか教えてください',
     contents: {
       type: 'bubble',
       hero: {
@@ -71,7 +148,7 @@ function welcomeMessage() {
           },
           {
             type: 'text',
-            text: '62歳・副業実践中・昭和男子の等身大発信',
+            text: '50代・副業実践中・昭和男子の等身大発信',
             size: 'sm',
             color: '#888888',
             margin: 'sm',
@@ -86,33 +163,30 @@ function welcomeMessage() {
         contents: [
           {
             type: 'text',
-            text: '友だち追加ありがとうございます！\n一級建築士カツヤスです。',
-            wrap: true,
-            size: 'md',
-          },
-          {
-            type: 'separator',
-            margin: 'md',
-          },
-          {
-            type: 'text',
             text: '📌 どこから来たか教えてください',
-            margin: 'md',
             weight: 'bold',
             color: '#E6580C',
           },
           {
+            type: 'text',
+            text: '下のキーワードをそのまま送ってください。',
+            size: 'sm',
+            color: '#888888',
+            margin: 'sm',
+            wrap: true,
+          },
+          {
             type: 'box',
             layout: 'vertical',
-            margin: 'sm',
+            margin: 'md',
             contents: [
-              keyword('副業本', '「副業で1000万溶かした62歳」を読んだ方'),
-              keyword('アロマ本', '「快眠革命」などdoTERRA関連本を読んだ方'),
-              keyword('インスタ', 'Instagramを見て来た方'),
-              keyword('note', 'noteを読んで来た方'),
-              keyword('設計図', '人生設計図テンプレートをもらいたい方'),
-              keyword('外壁修繕', '外壁修繕診断アプリを使った方'),
-              keyword('相談', '個別相談を希望する方'),
+              keyword('副業本', '「副業で1000万溶かした62歳」を読んだ'),
+              keyword('アロマ本', '「快眠革命」などdoTERRA関連本を読んだ'),
+              keyword('インスタ', 'Instagramを見て来た'),
+              keyword('note', 'noteを読んで来た'),
+              keyword('設計図', '人生設計図テンプレートがほしい'),
+              keyword('外壁修繕', '外壁修繕診断アプリを使った'),
+              keyword('相談', '個別相談を希望する'),
             ],
           },
         ],
