@@ -503,7 +503,7 @@ function getReply(text) {
           contents: [
             {
               type: 'button',
-              action: { type: 'uri', label: '📋 利用規約・予約フォーム', uri: 'https://forms.gle/REFORM_CONSULT_FORM_URL_TBA' },
+              action: { type: 'uri', label: '📋 予約フォームを開く', uri: 'https://friendly-licorice-3bab23.netlify.app/reform-consult.html' },
               style: 'primary',
               color: '#0C2448',
             },
