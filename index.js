@@ -422,18 +422,109 @@ function getReply(text) {
     };
   }
 
+  // 【流入元】リフォーム本「100万円損しないリフォーム」読者プレゼント
+  // 合言葉: 「リフォーム本」「見積書チェッカー」「見積もりチェッカー」「100万円」
+  if (
+    text.includes('リフォーム本') ||
+    text.includes('見積書チェッカー') ||
+    text.includes('見積もりチェッカー') ||
+    text.includes('見積チェッカー') ||
+    text.includes('100万円')
+  ) {
+    return {
+      type: 'flex',
+      altText: 'リフォーム本の読者プレゼント・見積書チェックリストをお届けします',
+      contents: {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '📘 リフォーム本を読んでくれてありがとう！', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
+            { type: 'separator', margin: 'md' },
+            {
+              type: 'text',
+              text: '『100万円損しないリフォーム ─業者を見抜く7つの質問』を手に取ってくれてありがとう。\n\n下の「見積書チェックリスト」を、お手元の見積書とあわせて使ってくれ。本書で出てきた7つの質問が、見積書のどこに反映されているかを1項目ずつチェックできる。\n\n何か疑問があれば、このトークでメッセージを送ってくれ。一級建築士として30年の経験から、できる範囲で答える。\n\n佐藤勝保（カツヤス）',
+              wrap: true,
+              margin: 'md',
+              size: 'sm',
+            },
+          ],
+          paddingAll: '20px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'button',
+              action: { type: 'uri', label: '📋 見積書チェックリスト（PDF）', uri: 'https://www.dropbox.com/scl/fi/ekkjwh6a62gj52pcuxn2l/estimate_checklist.pdf?rlkey=johmpbot80txsvkozftwk6owo&dl=0' },
+              style: 'primary',
+              color: '#0C2448',
+            },
+            {
+              type: 'button',
+              action: { type: 'uri', label: '個別相談を希望する', uri: 'line://oaMessage/@491fsuyy/?個別相談希望' },
+              style: 'secondary',
+              margin: 'sm',
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  // リフォーム本 個別相談希望
+  if (text.includes('個別相談希望') || text.includes('リフォーム相談')) {
+    return {
+      type: 'flex',
+      altText: 'リフォーム個別相談のご案内',
+      contents: {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '🏠 リフォーム個別相談', weight: 'bold', size: 'lg', color: '#0C2448' },
+            { type: 'separator', margin: 'md' },
+            {
+              type: 'text',
+              text: '個別相談のお問い合わせ、ありがとう。\n\n本相談は、本書『100万円損しないリフォーム』の7つの質問を、あなたのケースに沿って具体的に活用するためのお手伝いだ。\n\n■ 形式：オンライン（Zoom／Meet）または対面（神奈川県相模原市内の貸会議室）\n■ 時間：1案件 60分程度\n■ 料金：¥20,000（税込・モニター価格）\n\n下記の点をご了承ください：\n・特定業者の評価・推奨は行わない\n・最終的な業者選定・契約判断は相談者ご自身\n・建築士法上の「設計」「工事監理」は本相談に含まれない\n\n予約フォーム・規約はリンクから確認してくれ。',
+              wrap: true,
+              margin: 'md',
+              size: 'sm',
+            },
+          ],
+          paddingAll: '20px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'button',
+              action: { type: 'uri', label: '📋 利用規約・予約フォーム', uri: 'https://forms.gle/REFORM_CONSULT_FORM_URL_TBA' },
+              style: 'primary',
+              color: '#0C2448',
+            },
+          ],
+        },
+      },
+    };
+  }
+
   // 相談
   if (text.includes('相談') || text.includes('コンサル') || text.includes('個別')) {
     return {
       type: 'text',
-      text: '📞 個別相談について\n\n以下の相談を受け付けている：\n・老後の資金・生き方相談\n・副業の始め方・失敗しない選び方\n・建築・リフォーム相談\n・外壁修繕・業者選び相談\n\n希望の方は「相談希望」と送ってくれ。\n日程を調整する。\n\nカツヤス',
+      text: '📞 個別相談について\n\n以下の相談を受け付けている：\n・老後の資金・生き方相談\n・副業の始め方・失敗しない選び方\n・建築・リフォーム相談（書籍『100万円損しないリフォーム』読者の方は「個別相談希望」と送ってくれ）\n・外壁修繕・業者選び相談\n\n希望の方は「相談希望」と送ってくれ。\n日程を調整する。\n\nカツヤス',
     };
   }
 
   // デフォルト返信
   return {
     type: 'text',
-    text: 'メッセージありがとうございます！\n\nどこから来てくれたか教えてほしい：\n\n「副業本」→ 副業で1000万の本を読んだ\n「アロマ本」→ doTERRA関連本を読んだ\n「アロマ」→ アロマアプリをもらいたい\n「インスタ」→ Instagramを見た\n「note」→ noteを読んだ\n「設計図」→ テンプレートがほしい\n「外壁修繕」→ 外壁修繕診断アプリを使った\n「相談」→ 個別相談したい\n\nカツヤス',
+    text: 'メッセージありがとうございます！\n\nどこから来てくれたか教えてほしい：\n\n「リフォーム本」→ 『100万円損しないリフォーム』を読んだ（読者プレゼントあり）\n「個別相談希望」→ リフォームの個別相談を受けたい\n「副業本」→ 副業で1000万の本を読んだ\n「アロマ本」→ doTERRA関連本を読んだ\n「アロマ」→ アロマアプリをもらいたい\n「インスタ」→ Instagramを見た\n「note」→ noteを読んだ\n「設計図」→ テンプレートがほしい\n「外壁修繕」→ 外壁修繕診断アプリを使った\n「相談」→ 個別相談したい\n\nカツヤス',
   };
 }
 
