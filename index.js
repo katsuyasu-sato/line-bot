@@ -31,18 +31,27 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
 // ── イベント処理 ────────────────────────────────────────
 async function handleEvent(event) {
+  // ユーザー名を取得
+  let userName = 'あなた';
+  try {
+    const profile = await client.getProfile(event.source.userId);
+    userName = profile.displayName;
+  } catch (e) {
+    // 取得失敗時はデフォルト名を使用
+  }
+
   // 友だち追加・ブロック解除 → プレゼント + キーワードメニュー（2通）
   if (event.type === 'follow') {
     return client.replyMessage({
       replyToken: event.replyToken,
-      messages: welcomeMessages(),
+      messages: welcomeMessages(userName),
     });
   }
 
   // テキストメッセージ処理
   if (event.type === 'message' && event.message.type === 'text') {
     const text = event.message.text.trim();
-    const reply = getReply(text);
+    const reply = getReply(text, userName);
     return client.replyMessage({
       replyToken: event.replyToken,
       messages: [reply],
@@ -51,11 +60,11 @@ async function handleEvent(event) {
 }
 
 // ── ウェルカムメッセージ（2通送信） ───────────────────────
-function welcomeMessages() {
-  return [giftMessage(), keywordMenuMessage()];
+function welcomeMessages(userName) {
+  return [giftMessage(userName), keywordMenuMessage()];
 }
 
-function giftMessage() {
+function giftMessage(userName) {
   return {
     type: 'flex',
     altText: '【登録プレゼント】アロマケアアプリを受け取ってください',
@@ -89,7 +98,7 @@ function giftMessage() {
         contents: [
           {
             type: 'text',
-            text: '友だち追加ありがとうございます！\n一級建築士カツヤスです。',
+            text: `${userName}さん、友だち追加ありがとうございます！\n一級建築士カツヤスです。`,
             wrap: true,
             size: 'md',
             weight: 'bold',
@@ -209,7 +218,7 @@ function keyword(word, desc) {
 }
 
 // ── キーワード別返信 ────────────────────────────────────
-function getReply(text) {
+function getReply(text, userName) {
 
   // 【流入元】副業本
   if (text.includes('副業本') || text.includes('副業')) {
@@ -422,6 +431,91 @@ function getReply(text) {
     };
   }
 
+  // 【流入元】貧乏脳と金持ち脳 読者プレゼント
+  // 合言葉: 「貧乏脳」「金持ち脳」「チェックリスト」「口癖カード」
+  if (
+    text.includes('貧乏脳') ||
+    text.includes('金持ち脳') ||
+    text.includes('チェックリスト') ||
+    text.includes('口癖カード')
+  ) {
+    return {
+      type: 'flex',
+      altText: '【登録プレゼント】金持ち脳チェックリスト＋口癖変換カードをお届けします',
+      contents: {
+        type: 'bubble',
+        hero: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '🎁 読者限定プレゼント2点', weight: 'bold', size: 'xl', color: '#C9A84C' },
+            { type: 'text', text: '貧乏脳と金持ち脳', size: 'sm', color: '#888888', margin: 'sm' },
+          ],
+          paddingAll: '20px',
+          backgroundColor: '#0C2448',
+        },
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'text',
+              text: '本を読んでくれてありがとう。\n\n登録プレゼントを2点用意した。\nスマホに保存して使ってくれ。',
+              wrap: true,
+              size: 'md',
+              weight: 'bold',
+            },
+            { type: 'separator', margin: 'md' },
+            {
+              type: 'text',
+              text: '✅ A：金持ち脳チェックリスト\n　10項目で今の自分を確認できる\n\n✅ B：口癖変換カード\n　貧乏脳の言葉→金持ち脳の言葉に\n　1週間使うだけで思考が変わる',
+              wrap: true,
+              margin: 'md',
+              size: 'sm',
+            },
+          ],
+          paddingAll: '20px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'button',
+              action: {
+                type: 'uri',
+                label: '📋 A：金持ち脳チェックリスト',
+                uri: 'https://www.dropbox.com/scl/fi/ictgt05xxg1ifkpebff4p/present_A_checklist.png?rlkey=wh5w663c8rhyioovrwjm7fgx8&dl=1',
+              },
+              style: 'primary',
+              color: '#0C2448',
+            },
+            {
+              type: 'button',
+              action: {
+                type: 'uri',
+                label: '🃏 B：口癖変換カード',
+                uri: 'https://www.dropbox.com/scl/fi/qepm48afpp9tj2ol3sxtn/present_B_kotoba.png?rlkey=ophofws598qynz514cv1h9nn3&dl=1',
+              },
+              style: 'secondary',
+              margin: 'sm',
+            },
+            {
+              type: 'button',
+              action: {
+                type: 'uri',
+                label: '個別相談を希望する',
+                uri: 'line://oaMessage/@491fsuyy/?相談',
+              },
+              style: 'secondary',
+              margin: 'sm',
+            },
+          ],
+        },
+      },
+    };
+  }
+
   // 【流入元】リフォーム本「100万円損しないリフォーム」読者プレゼント
   // 合言葉: 「リフォーム本」「見積書チェッカー」「見積もりチェッカー」「100万円」
   if (
@@ -524,7 +618,7 @@ function getReply(text) {
   // デフォルト返信
   return {
     type: 'text',
-    text: 'メッセージありがとうございます！\n\nどこから来てくれたか教えてほしい：\n\n「リフォーム本」→ 『100万円損しないリフォーム』を読んだ（読者プレゼントあり）\n「個別相談希望」→ リフォームの個別相談を受けたい\n「副業本」→ 副業で1000万の本を読んだ\n「アロマ本」→ doTERRA関連本を読んだ\n「アロマ」→ アロマアプリをもらいたい\n「インスタ」→ Instagramを見た\n「note」→ noteを読んだ\n「設計図」→ テンプレートがほしい\n「外壁修繕」→ 外壁修繕診断アプリを使った\n「相談」→ 個別相談したい\n\nカツヤス',
+    text: `${userName}さん、メッセージありがとうございます！\n\n下のキーワードをそのまま送ってもらえると、すぐに案内できます：\n\n「貧乏脳」または「金持ち脳」→ プレゼント2点をお届け\n「リフォーム本」→ 見積書チェックリストをお届け\n「副業本」→ 副業の続き話をお届け\n「アロマ本」→ アロマアプリをご案内\n「インスタ」→ Instagram発信の裏話\n「note」→ noteの続き話\n「外壁修繕」→ 外壁診断の補足説明\n「相談」→ 個別相談のご案内\n\nカツヤス`,
   };
 }
 
