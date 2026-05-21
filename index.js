@@ -622,9 +622,14 @@ function getReply(text, userName) {
   };
 }
 
+// ── ヘルスチェック ──────────────────────────────────────
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', version: '2.1.0', updated: '2026-05-21' });
+});
+
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot サーバー起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.1.0 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
