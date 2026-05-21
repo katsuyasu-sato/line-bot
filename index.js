@@ -59,163 +59,18 @@ async function handleEvent(event) {
   }
 }
 
-// ── ウェルカムメッセージ（2通送信） ───────────────────────
+// ── ウェルカムメッセージ（1通） ────────────────────────────
 function welcomeMessages(userName) {
-  return [giftMessage(userName), keywordMenuMessage()];
+  return [giftMessage(userName)];
 }
 
 function giftMessage(userName) {
   return {
-    type: 'flex',
-    altText: '【登録プレゼント】アロマケアアプリを受け取ってください',
-    contents: {
-      type: 'bubble',
-      hero: {
-        type: 'box',
-        layout: 'vertical',
-        contents: [
-          {
-            type: 'text',
-            text: '🎁 登録プレゼント',
-            weight: 'bold',
-            size: 'xl',
-            color: '#2E7D32',
-          },
-          {
-            type: 'text',
-            text: 'doTERRA アロマケアガイドアプリ（無料）',
-            size: 'sm',
-            color: '#555555',
-            margin: 'sm',
-          },
-        ],
-        paddingAll: '20px',
-        backgroundColor: '#E8F5E9',
-      },
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        contents: [
-          {
-            type: 'text',
-            text: `${userName}さん、友だち追加ありがとうございます！\n一級建築士カツヤスです。`,
-            wrap: true,
-            size: 'md',
-            weight: 'bold',
-          },
-          {
-            type: 'separator',
-            margin: 'md',
-          },
-          {
-            type: 'text',
-            text: 'まず登録プレゼントを受け取ってください。\n\n症状や気分を選ぶだけで\nおすすめのオイルと使い方がわかる\n無料アプリです。\n\n✅ 希釈方法・量もすぐわかる\n✅ 加齢臭・疲労ケアも掲載\n✅ 購入リンクも完備',
-            wrap: true,
-            margin: 'md',
-            size: 'sm',
-          },
-        ],
-        paddingAll: '20px',
-      },
-      footer: {
-        type: 'box',
-        layout: 'vertical',
-        contents: [
-          {
-            type: 'button',
-            action: {
-              type: 'uri',
-              label: '🌿 アロマケアアプリを受け取る（無料）',
-              uri: 'https://friendly-licorice-3bab23.netlify.app',
-            },
-            style: 'primary',
-            color: '#2E7D32',
-          },
-        ],
-      },
-    },
+    type: 'text',
+    text: `${userName}さん、友だち追加ありがとうございます！\n一級建築士カツヤスです。\n\n本を読んでくれた方へ：\n本の中に書いてある「合言葉」をこのトークに送ってください。\nその本専用のプレゼントをお届けします。\n\nカツヤス`,
   };
 }
 
-function keywordMenuMessage() {
-  return {
-    type: 'flex',
-    altText: 'どこから来たか教えてください',
-    contents: {
-      type: 'bubble',
-      hero: {
-        type: 'box',
-        layout: 'vertical',
-        contents: [
-          {
-            type: 'text',
-            text: 'カツヤス｜一級建築士',
-            weight: 'bold',
-            size: 'lg',
-            color: '#0C2448',
-            wrap: true,
-          },
-          {
-            type: 'text',
-            text: '50代・副業実践中・昭和男子の等身大発信',
-            size: 'sm',
-            color: '#888888',
-            margin: 'sm',
-          },
-        ],
-        paddingAll: '20px',
-        backgroundColor: '#FFF9F0',
-      },
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        contents: [
-          {
-            type: 'text',
-            text: '📌 どこから来たか教えてください',
-            weight: 'bold',
-            color: '#E6580C',
-          },
-          {
-            type: 'text',
-            text: '下のキーワードをそのまま送ってください。',
-            size: 'sm',
-            color: '#888888',
-            margin: 'sm',
-            wrap: true,
-          },
-          {
-            type: 'box',
-            layout: 'vertical',
-            margin: 'md',
-            contents: [
-              keyword('副業本', '「副業で1000万溶かした62歳」を読んだ'),
-              keyword('アロマ本', '「快眠革命」などdoTERRA関連本を読んだ'),
-              keyword('インスタ', 'Instagramを見て来た'),
-              keyword('note', 'noteを読んで来た'),
-              keyword('設計図', '人生設計図テンプレートがほしい'),
-              keyword('外壁修繕', '外壁修繕診断アプリを使った'),
-              keyword('相談', '個別相談を希望する'),
-            ],
-          },
-        ],
-        paddingAll: '20px',
-      },
-    },
-  };
-}
-
-function keyword(word, desc) {
-  return {
-    type: 'box',
-    layout: 'horizontal',
-    margin: 'sm',
-    contents: [
-      { type: 'text', text: `「${word}」`, size: 'sm', color: '#0C2448', weight: 'bold', flex: 2 },
-      { type: 'text', text: `→ ${desc}`, size: 'sm', color: '#555555', flex: 5, wrap: true },
-    ],
-  };
-}
 
 // ── キーワード別返信 ────────────────────────────────────
 function getReply(text, userName) {
@@ -618,13 +473,13 @@ function getReply(text, userName) {
   // デフォルト返信
   return {
     type: 'text',
-    text: `${userName}さん、メッセージありがとうございます！\n\n下のキーワードをそのまま送ってもらえると、すぐに案内できます：\n\n「貧乏脳」または「金持ち脳」→ プレゼント2点をお届け\n「リフォーム本」→ 見積書チェックリストをお届け\n「副業本」→ 副業の続き話をお届け\n「アロマ本」→ アロマアプリをご案内\n「インスタ」→ Instagram発信の裏話\n「note」→ noteの続き話\n「外壁修繕」→ 外壁診断の補足説明\n「相談」→ 個別相談のご案内\n\nカツヤス`,
+    text: `${userName}さん、メッセージありがとうございます！\n\n本を読んでくれた方は、本の中に書いてある「合言葉」をそのまま送ってください。\nその本専用のプレゼントをお届けします。\n\nカツヤス`,
   };
 }
 
 // ── ヘルスチェック ──────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '2.1.0', updated: '2026-05-21' });
+  res.json({ status: 'ok', version: '2.2.0', updated: '2026-05-21' });
 });
 
 // ── サーバー起動 ────────────────────────────────────────
