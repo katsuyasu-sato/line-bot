@@ -130,6 +130,59 @@ function getReply(text, userName) {
     };
   }
 
+  // 【合言葉】香りは、空間の第4の建材だった 読者プレゼント
+  // 合言葉: 「香り」
+  if (text.includes('香り') || text.includes('建材')) {
+    return {
+      type: 'flex',
+      altText: '【読者プレゼント】doTERRAアロマケアアプリをお届けします',
+      contents: {
+        type: 'bubble',
+        hero: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '🎁 読者プレゼント', weight: 'bold', size: 'xl', color: '#2E7D32' },
+            { type: 'text', text: '香りは、空間の第4の建材だった', size: 'sm', color: '#888888', margin: 'sm' },
+          ],
+          paddingAll: '20px',
+          backgroundColor: '#E8F5E9',
+        },
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'text',
+              text: '本を読んでくれてありがとうございます。\n\n登録プレゼントとして、doTERRAアロマケアガイドアプリ（無料）を用意しました。\n\n症状や気分を選ぶだけで、おすすめオイルと使い方が出てきます。\n建築士ならではの「空間×香り」ケアにも使えるアプリです。\n\nカツヤス',
+              wrap: true,
+              size: 'sm',
+            },
+          ],
+          paddingAll: '20px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'button',
+              action: { type: 'uri', label: '🌿 アロマアプリを受け取る（無料）', uri: 'https://friendly-licorice-3bab23.netlify.app' },
+              style: 'primary',
+              color: '#2E7D32',
+            },
+            {
+              type: 'button',
+              action: { type: 'uri', label: 'doTERRAで購入する', uri: 'https://office.doterra.com/katuyasusatou' },
+              style: 'secondary',
+              margin: 'sm',
+            },
+          ],
+        },
+      },
+    };
+  }
+
   // 【合言葉】働く50代の快眠革命 読者プレゼント
   // 合言葉: 「快眠」
   if (text.includes('快眠') || text.includes('アロマ本') || text.includes('doTERRA') || text.includes('ドテラ')) {
@@ -441,7 +494,7 @@ function getReply(text, userName) {
 
 // ── ヘルスチェック ──────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '2.3.0', updated: '2026-05-21' });
+  res.json({ status: 'ok', version: '2.4.0', updated: '2026-05-21' });
 });
 
 // ── サーバー起動 ────────────────────────────────────────
