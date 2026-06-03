@@ -25,6 +25,15 @@ const client = new line.messagingApi.MessagingApiClient({
 
 const app = express();
 
+// ── デバッグ用リングバッファ（直近100件のイベントログ）─────
+// 秘密情報は載せない（ユーザーID・トークン等は出さない）
+const DEBUG_LOG_MAX = 100;
+const debugLog = [];
+function pushLog(entry) {
+  debugLog.push({ ts: new Date().toISOString(), ...entry });
+  if (debugLog.length > DEBUG_LOG_MAX) debugLog.shift();
+}
+
 // ── Webhook エンドポイント ──────────────────────────────
 // line.middleware() に頼らず、自前で署名検証 → 必ず即レスを返す。
 // これによりタイムアウト原因（middlewareが例外で死んでレスを返さない）を排除。
@@ -51,11 +60,13 @@ app.post(
         .digest('base64');
       if (signature !== expected) {
         console.warn('[WEBHOOK] signature mismatch (signature header present:', !!signature, ')');
+        pushLog({ kind: 'webhook', sig: 'mismatch', sig_present: !!signature, body_len: bodyString.length });
         // LINEの「検証」ボタンや疎通テストはここを通る。常に200を返してタイムアウトさせない。
         return res.status(200).json({ status: 'signature_mismatch_but_ok' });
       }
     } catch (e) {
       console.error('[WEBHOOK] signature verify exception:', e.message);
+      pushLog({ kind: 'webhook', sig: 'verify_error', error: e.message });
       return res.status(200).json({ status: 'verify_error_but_ok' });
     }
 
@@ -69,14 +80,18 @@ app.post(
     }
 
     const events = Array.isArray(body.events) ? body.events : [];
+    pushLog({ kind: 'webhook', sig: 'ok', events: events.length, types: events.map(e => e && e.type) });
+
     // 先にACKを返す（LINEはタイムアウト厳しいため）
     res.status(200).json({ status: 'ok' });
 
     // イベント処理は非同期で実行（res送信後）
-    try {
-      await Promise.all(events.map(handleEvent));
-    } catch (err) {
-      console.error('[WEBHOOK] handleEvent error:', err && err.message);
+    // 各イベントごとに try/catch して、一つの失敗で他を巻き込まないようにする
+    for (const ev of events) {
+      handleEvent(ev).catch((err) => {
+        console.error('[WEBHOOK] handleEvent error:', err && err.message);
+        pushLog({ kind: 'handle_event_error', type: ev && ev.type, error: err && err.message, status: err && err.statusCode });
+      });
     }
   }
 );
@@ -91,31 +106,47 @@ app.use((err, req, res, next) => {
 
 // ── イベント処理 ────────────────────────────────────────
 async function handleEvent(event) {
-  // ユーザー名を取得
-  let userName = 'あなた';
-  try {
-    const profile = await client.getProfile(event.source.userId);
-    userName = profile.displayName;
-  } catch (e) {
-    // 取得失敗時はデフォルト名を使用
-  }
+  if (!event) return;
 
-  // 友だち追加・ブロック解除 → プレゼント + キーワードメニュー（2通）
+  // 友だち追加・ブロック解除 → welcome message を最速で返す
+  // ⚠️ ここで getProfile() を待つと replyToken (30秒制限) が切れる可能性があるため、
+  //    follow ではユーザー名を取得せず即時 reply する
   if (event.type === 'follow') {
-    return client.replyMessage({
-      replyToken: event.replyToken,
-      messages: welcomeMessages(userName),
-    });
+    const messages = welcomeMessages('あなた');
+    await safeReply(event.replyToken, messages, 'follow');
+    return;
   }
 
   // テキストメッセージ処理
-  if (event.type === 'message' && event.message.type === 'text') {
-    const text = event.message.text.trim();
+  if (event.type === 'message' && event.message && event.message.type === 'text') {
+    const text = (event.message.text || '').trim();
+    // ユーザー名は best-effort（失敗してもデフォルト）
+    let userName = 'あなた';
+    try {
+      const profile = await client.getProfile(event.source.userId);
+      if (profile && profile.displayName) userName = profile.displayName;
+    } catch (e) {
+      // 取得失敗は無視
+    }
     const reply = getReply(text, userName);
-    return client.replyMessage({
-      replyToken: event.replyToken,
-      messages: [reply],
-    });
+    await safeReply(event.replyToken, [reply], 'message');
+    return;
+  }
+
+  // 上記以外のイベント（unfollow等）は何もしない
+  pushLog({ kind: 'event_ignored', type: event.type });
+}
+
+// reply送信のラッパー。エラー（401など）をログに残す
+async function safeReply(replyToken, messages, label) {
+  try {
+    await client.replyMessage({ replyToken, messages });
+    pushLog({ kind: 'reply_ok', label, msg_count: messages.length });
+  } catch (err) {
+    const status = err && (err.statusCode || (err.originalError && err.originalError.response && err.originalError.response.status));
+    const detail = err && err.message;
+    console.error(`[REPLY] ${label} failed status=${status} msg=${detail}`);
+    pushLog({ kind: 'reply_error', label, status, detail });
   }
 }
 
@@ -125,9 +156,10 @@ function welcomeMessages(userName) {
 }
 
 function giftMessage(userName) {
+  // ⚠️ follow 時は userName を取得していないので、固定の挨拶にする
   return {
     type: 'text',
-    text: `${userName}さん、友だち追加ありがとうございます！\n一級建築士カツヤスです。\n\n本を読んでくれた方へ：\n本の中に書いてある「合言葉」をこのトークに送ってください。\nその本専用のプレゼントをお届けします。\n\nカツヤス`,
+    text: '友だち追加ありがとうございます。\n一級建築士のカツヤスです。\n\n本を読んでくださった方は、本の中に書いてある「合言葉」をこのトークに送ってください。\nその本専用のプレゼントをお届けします。\n\nカツヤス',
   };
 }
 
@@ -603,16 +635,35 @@ function getReply(text, userName) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.5.0',
+    version: '2.5.1',
     updated: '2026-06-04',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
+    debug_log_size: debugLog.length,
+  });
+});
+
+// ── デバッグログ閲覧（シンプルなトークンガード）───────────
+// 使い方: /debug/log?token=<DEBUG_TOKEN>
+// DEBUG_TOKEN 未設定なら 404 にしてエンドポイント自体を隠す。
+app.get('/debug/log', (req, res) => {
+  const required = process.env.DEBUG_TOKEN;
+  if (!required) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  if (req.query.token !== required) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  res.json({
+    version: '2.5.1',
+    count: debugLog.length,
+    entries: debugLog,
   });
 });
 
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.5.0 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.5.1 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
