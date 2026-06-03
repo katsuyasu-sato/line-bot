@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────
 require('dotenv').config();
 const express = require('express');
+const crypto = require('crypto');
 const line = require('@line/bot-sdk');
 
 const config = {
@@ -11,21 +12,80 @@ const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 };
 
+// ── 起動時 環境変数チェック（値は出さない）─────────────
+console.log('[BOOT] LINE_CHANNEL_SECRET is set:', !!config.channelSecret);
+console.log('[BOOT] LINE_CHANNEL_ACCESS_TOKEN is set:', !!config.channelAccessToken);
+if (!config.channelSecret || !config.channelAccessToken) {
+  console.error('[BOOT][FATAL] LINE 環境変数が未設定。Railway の Variables を確認してください。');
+}
+
 const client = new line.messagingApi.MessagingApiClient({
-  channelAccessToken: config.channelAccessToken,
+  channelAccessToken: config.channelAccessToken || 'dummy',
 });
 
 const app = express();
 
 // ── Webhook エンドポイント ──────────────────────────────
-app.post('/webhook', line.middleware(config), async (req, res) => {
-  try {
-    const events = req.body.events;
-    await Promise.all(events.map(handleEvent));
-    res.json({ status: 'ok' });
-  } catch (err) {
-    console.error('Error:', err);
-    res.status(500).json({ error: err.message });
+// line.middleware() に頼らず、自前で署名検証 → 必ず即レスを返す。
+// これによりタイムアウト原因（middlewareが例外で死んでレスを返さない）を排除。
+app.post(
+  '/webhook',
+  express.raw({ type: '*/*' }), // 生バイナリで受け取って自前検証
+  async (req, res) => {
+    const signature = req.get('x-line-signature') || '';
+    const rawBody = req.body; // Buffer
+
+    // 環境変数チェック（無ければ即 500、ハングさせない）
+    if (!config.channelSecret) {
+      console.error('[WEBHOOK] LINE_CHANNEL_SECRET unset');
+      return res.status(500).json({ error: 'LINE_CHANNEL_SECRET unset' });
+    }
+
+    // 自前 HMAC-SHA256 署名検証
+    let bodyString = '';
+    try {
+      bodyString = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : (typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody || {}));
+      const expected = crypto
+        .createHmac('SHA256', config.channelSecret)
+        .update(bodyString)
+        .digest('base64');
+      if (signature !== expected) {
+        console.warn('[WEBHOOK] signature mismatch (signature header present:', !!signature, ')');
+        // LINEの「検証」ボタンや疎通テストはここを通る。常に200を返してタイムアウトさせない。
+        return res.status(200).json({ status: 'signature_mismatch_but_ok' });
+      }
+    } catch (e) {
+      console.error('[WEBHOOK] signature verify exception:', e.message);
+      return res.status(200).json({ status: 'verify_error_but_ok' });
+    }
+
+    // JSONパース
+    let body;
+    try {
+      body = JSON.parse(bodyString || '{}');
+    } catch (e) {
+      console.error('[WEBHOOK] JSON parse error:', e.message);
+      return res.status(200).json({ status: 'json_parse_error_but_ok' });
+    }
+
+    const events = Array.isArray(body.events) ? body.events : [];
+    // 先にACKを返す（LINEはタイムアウト厳しいため）
+    res.status(200).json({ status: 'ok' });
+
+    // イベント処理は非同期で実行（res送信後）
+    try {
+      await Promise.all(events.map(handleEvent));
+    } catch (err) {
+      console.error('[WEBHOOK] handleEvent error:', err && err.message);
+    }
+  }
+);
+
+// 万一のためのエラーハンドラ（res未送信時のみ500を即返す）
+app.use((err, req, res, next) => {
+  console.error('[ERROR HANDLER]', err && err.message);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -485,6 +545,53 @@ function getReply(text, userName) {
     };
   }
 
+  // 【流入元】Instagram投稿②「ミネラルが足りてなかった話」doTERRA PHOSSIL
+  // 合言葉: 「ミネラル」
+  if (text.includes('ミネラル') || text.includes('PHOSSIL') || text.includes('フォッシル')) {
+    return {
+      type: 'flex',
+      altText: '50代昭和男子のセルフケア記録をお届けします',
+      contents: {
+        type: 'bubble',
+        hero: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '🌿 セルフケア実験記録', weight: 'bold', size: 'xl', color: '#2E7D32' },
+            { type: 'text', text: '50代昭和男子の、ささやかな自己メンテ', size: 'sm', color: '#888888', margin: 'sm', wrap: true },
+          ],
+          paddingAll: '20px',
+          backgroundColor: '#E8F5E9',
+        },
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'text',
+              text: '投稿を見てくれてありがとう。\n\n家ってのは、見えない土台（基礎・鉄筋）が一番大事だ。体も同じじゃないかと思って、俺はミネラル補給（PHOSSIL）を習慣にしている。\n\n劇的に元気になった、なんて話じゃない。「土台の材料をちゃんと入れてる」という安心感の話だ。\n\n※これはサプリメント（食品）の話です。病気を治すものでも、効果を約束するものでもありません。あくまで一人の体験記録です。\n\nカツヤス',
+              wrap: true,
+              size: 'sm',
+            },
+          ],
+          paddingAll: '20px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'button',
+              action: { type: 'uri', label: 'doTERRAを見てみる', uri: 'https://office.doterra.com/katuyasusatou' },
+              style: 'primary',
+              color: '#2E7D32',
+            },
+          ],
+        },
+      },
+    };
+  }
+
   // デフォルト返信
   return {
     type: 'text',
@@ -494,12 +601,18 @@ function getReply(text, userName) {
 
 // ── ヘルスチェック ──────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '2.4.0', updated: '2026-05-21' });
+  res.json({
+    status: 'ok',
+    version: '2.5.0',
+    updated: '2026-06-04',
+    secret_set: !!config.channelSecret,
+    token_set: !!config.channelAccessToken,
+  });
 });
 
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.1.0 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.5.0 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
