@@ -137,16 +137,48 @@ async function handleEvent(event) {
   pushLog({ kind: 'event_ignored', type: event.type });
 }
 
-// reply送信のラッパー。エラー（401など）をログに残す
+// reply送信のラッパー。エラー（401/400など）をログに残す
+// 400の場合は LINE API の詳細メッセージ（どのプロパティが不正か）まで記録する
 async function safeReply(replyToken, messages, label) {
   try {
     await client.replyMessage({ replyToken, messages });
     pushLog({ kind: 'reply_ok', label, msg_count: messages.length });
   } catch (err) {
-    const status = err && (err.statusCode || (err.originalError && err.originalError.response && err.originalError.response.status));
+    const status =
+      err &&
+      (err.statusCode ||
+        (err.originalError && err.originalError.response && err.originalError.response.status));
     const detail = err && err.message;
-    console.error(`[REPLY] ${label} failed status=${status} msg=${detail}`);
-    pushLog({ kind: 'reply_error', label, status, detail });
+
+    // LINE API のレスポンスボディから詳細を吸い出す（SDK のバージョンで場所が違うため全方位で探す）
+    let apiBody = null;
+    try {
+      if (err && err.originalError && err.originalError.response) {
+        apiBody = err.originalError.response.data || err.originalError.response.body || null;
+      }
+      if (!apiBody && err && err.response) {
+        apiBody = err.response.data || err.response.body || null;
+      }
+      if (!apiBody && err && err.body) {
+        apiBody = err.body;
+      }
+    } catch (_) {
+      // 取り出し失敗は無視
+    }
+
+    // 文字列化（オブジェクトならJSON化、長すぎたら切る）
+    let apiBodyStr = '';
+    try {
+      apiBodyStr = typeof apiBody === 'string' ? apiBody : JSON.stringify(apiBody);
+    } catch (_) {
+      apiBodyStr = String(apiBody);
+    }
+    if (apiBodyStr && apiBodyStr.length > 1500) {
+      apiBodyStr = apiBodyStr.slice(0, 1500) + '...(truncated)';
+    }
+
+    console.error(`[REPLY] ${label} failed status=${status} msg=${detail} body=${apiBodyStr}`);
+    pushLog({ kind: 'reply_error', label, status, detail, api_body: apiBodyStr });
   }
 }
 
@@ -465,9 +497,9 @@ function getReply(text, userName) {
             {
               type: 'button',
               action: {
-                type: 'uri',
+                type: 'message',
                 label: '個別相談を希望する',
-                uri: 'line://oaMessage/@491fsuyy/?相談',
+                text: '相談希望',
               },
               style: 'secondary',
               margin: 'sm',
@@ -520,7 +552,7 @@ function getReply(text, userName) {
             },
             {
               type: 'button',
-              action: { type: 'uri', label: '個別相談を希望する', uri: 'line://oaMessage/@491fsuyy/?個別相談希望' },
+              action: { type: 'message', label: '個別相談を希望する', text: '個別相談希望' },
               style: 'secondary',
               margin: 'sm',
             },
@@ -635,7 +667,7 @@ function getReply(text, userName) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.5.1',
+    version: '2.5.2',
     updated: '2026-06-04',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
@@ -655,7 +687,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.5.1',
+    version: '2.5.2',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -664,6 +696,6 @@ app.get('/debug/log', (req, res) => {
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.5.1 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.5.2 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
