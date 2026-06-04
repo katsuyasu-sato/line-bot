@@ -191,7 +191,7 @@ function giftMessage(userName) {
   // ⚠️ follow 時は userName を取得していないので、固定の挨拶にする
   return {
     type: 'text',
-    text: '友だち追加ありがとうございます。\n一級建築士のカツヤスです。\n\n本を読んでくださった方は、本の中に書いてある「合言葉」をこのトークに送ってください。\nその本専用のプレゼントをお届けします。\n\nカツヤス',
+    text: '友だち追加ありがとうございます。\n一級建築士の佐藤勝保（カツヤス）です。\n\nKindle本またはnote記事から来てくださった方は、本や記事の中に書いてある「合言葉」をこのトークに送ってください。\nその本・記事専用のプレゼントをお届けします。\n\n佐藤勝保（カツヤス）／一級建築士・建築30年',
   };
 }
 
@@ -203,18 +203,18 @@ function getReply(text, userName) {
   if (text.includes('副業本') || text.includes('副業')) {
     return {
       type: 'flex',
-      altText: '「副業で1000万溶かした62歳」を読んでくれてありがとう！',
+      altText: '『副業で1000万溶かした62歳』をお読みいただきありがとうございます',
       contents: {
         type: 'bubble',
         body: {
           type: 'box',
           layout: 'vertical',
           contents: [
-            { type: 'text', text: '📖 副業本を読んでくれてありがとう！', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
+            { type: 'text', text: '📖 副業本にご関心いただきありがとうございます', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
             { type: 'separator', margin: 'md' },
             {
               type: 'text',
-              text: '1000万溶かした話、最後まで読んでくれたか。\n恥をさらした甲斐があった。\n\nこのLINEでは本には書けなかった続きの話をしていく。\nよろしくな。',
+              text: 'Kindle本『副業で1000万溶かした62歳』、またはnoteの記事から来てくださったかもしれません。\n\n1000万円を溶かした話を最後まで読んでいただき、ありがとうございます。恥をさらした甲斐がありました。\n\nこのLINEでは、本や記事には書けなかった続きの話をお届けしていきます。よろしくお願いします。\n\n佐藤勝保（カツヤス）\n一級建築士・建築30年',
               wrap: true,
               margin: 'md',
               size: 'sm',
@@ -242,7 +242,7 @@ function getReply(text, userName) {
   if (text.includes('インスタ') || text.includes('instagram') || text.includes('Instagram')) {
     return {
       type: 'text',
-      text: '📸 Instagramから来てくれたか！\n\nInstagramでは毎日発信しているが、\nここでは投稿に書けなかった本音の話をする。\n\n引き続きよろしくな。\nカツヤス',
+      text: '📸 Instagramから来てくださりありがとうございます！\n\nInstagramでは日々発信していますが、\nこちらでは投稿に書けなかった本音の話をお届けします。\n\n引き続きよろしくお願いします。\n佐藤勝保（カツヤス）／一級建築士',
     };
   }
 
@@ -250,7 +250,7 @@ function getReply(text, userName) {
   if (text.includes('note') || text.includes('ノート')) {
     return {
       type: 'text',
-      text: '📝 noteから来てくれたか！\n\nnoteでは記事を書いているが、\nここでは記事にならない生の話をしていく。\n\nよろしくな。\nカツヤス',
+      text: '📝 noteから来てくださりありがとうございます！\n\nnoteでは記事を書いていますが、\nこちらでは記事にならない生の話をお届けしていきます。\n\nよろしくお願いします。\n佐藤勝保（カツヤス）／一級建築士',
     };
   }
 
@@ -259,14 +259,14 @@ function getReply(text, userName) {
   if (text.includes('香り') || text.includes('建材')) {
     return {
       type: 'flex',
-      altText: '【読者プレゼント】doTERRAアロマケアアプリをお届けします',
+      altText: '【ご登録プレゼント】doTERRAアロマケアガイドアプリをお届けします',
       contents: {
         type: 'bubble',
         hero: {
           type: 'box',
           layout: 'vertical',
           contents: [
-            { type: 'text', text: '🎁 読者プレゼント', weight: 'bold', size: 'xl', color: '#2E7D32' },
+            { type: 'text', text: '🎁 ご登録プレゼント', weight: 'bold', size: 'xl', color: '#2E7D32' },
             { type: 'text', text: '香りは、空間の第4の建材だった', size: 'sm', color: '#888888', margin: 'sm' },
           ],
           paddingAll: '20px',
@@ -278,7 +278,7 @@ function getReply(text, userName) {
           contents: [
             {
               type: 'text',
-              text: '本を読んでくれてありがとうございます。\n\n登録プレゼントとして、doTERRAアロマケアガイドアプリ（無料）を用意しました。\n\n症状や気分を選ぶだけで、おすすめオイルと使い方が出てきます。\n建築士ならではの「空間×香り」ケアにも使えるアプリです。\n\nカツヤス',
+              text: '本や記事にご関心を持っていただきありがとうございます。\n\nKindle本『香りは、空間の第4の建材だった』、またはnoteの記事から来てくださった方へ、ご登録プレゼントとしてdoTERRAアロマケアガイドアプリ（無料）をご用意しました。\n\n症状や気分を選ぶだけで、おすすめのオイルと使い方が出てきます。建築士ならではの「空間×香り」という視点でもお使いいただけるアプリです。\n\n佐藤勝保（カツヤス）\n一級建築士・建築30年',
               wrap: true,
               size: 'sm',
             },
@@ -307,20 +307,20 @@ function getReply(text, userName) {
     };
   }
 
-  // 【合言葉】働く50代の快眠革命 読者プレゼント
-  // 合言葉: 「快眠」
+  // 【合言葉】働く50代の快眠革命 / 朝まで眠れる私に変えた本 読者プレゼント
+  // 合言葉: 「快眠」「アロマ本」「doTERRA」「ドテラ」
   if (text.includes('快眠') || text.includes('アロマ本') || text.includes('doTERRA') || text.includes('ドテラ')) {
     return {
       type: 'flex',
-      altText: '【読者プレゼント】doTERRAアロマケアアプリをお届けします',
+      altText: '【ご登録プレゼント】doTERRAアロマケアガイドアプリをお届けします',
       contents: {
         type: 'bubble',
         hero: {
           type: 'box',
           layout: 'vertical',
           contents: [
-            { type: 'text', text: '🎁 読者プレゼント', weight: 'bold', size: 'xl', color: '#2E7D32' },
-            { type: 'text', text: '働く50代の快眠革命', size: 'sm', color: '#888888', margin: 'sm' },
+            { type: 'text', text: '🎁 ご登録プレゼント', weight: 'bold', size: 'xl', color: '#2E7D32' },
+            { type: 'text', text: '快眠シリーズ読者の方へ', size: 'sm', color: '#888888', margin: 'sm' },
           ],
           paddingAll: '20px',
           backgroundColor: '#E8F5E9',
@@ -331,7 +331,7 @@ function getReply(text, userName) {
           contents: [
             {
               type: 'text',
-              text: '本を読んでくれてありがとう。\n\n登録プレゼントとして、doTERRAアロマケアガイドアプリ（無料）を用意した。\n\n症状や気分を選ぶだけで、おすすめオイルと使い方が出てくる。\n\n✅ 希釈方法・量もすぐわかる\n✅ 加齢臭・疲労ケアも掲載\n✅ 購入リンクも完備\n\nカツヤス',
+              text: '本や記事にご関心を持っていただきありがとうございます。\n\nKindle本『働く50代の快眠革命』『朝まで眠れる私に変えた本』、またはnoteの記事から来てくださった方へ、ご登録プレゼントとしてdoTERRAアロマケアガイドアプリ（無料）をご用意しました。\n\n症状や気分を選ぶだけで、おすすめのオイルと使い方が出てきます。\n\n✅ 希釈方法・量もすぐにわかります\n✅ 加齢臭・疲労ケアも掲載しています\n✅ 購入リンクも完備しています\n\n佐藤勝保（カツヤス）\n一級建築士・建築30年',
               wrap: true,
               size: 'sm',
             },
@@ -364,7 +364,7 @@ function getReply(text, userName) {
   if (text.includes('設計図') || text.includes('テンプレート')) {
     return {
       type: 'flex',
-      altText: '人生設計図テンプレートをお届けします！',
+      altText: '人生設計図テンプレートをお届けします',
       contents: {
         type: 'bubble',
         body: {
@@ -375,7 +375,7 @@ function getReply(text, userName) {
             { type: 'separator', margin: 'md' },
             {
               type: 'text',
-              text: '4つの設計図テンプレートを用意している：\n\n✅ お金の設計図\n✅ 健康の設計図\n✅ 仕事・やりがいの設計図\n✅ 人間関係の設計図\n\n※ 現在準備中。もう少し待ってくれ。',
+              text: '4つの設計図テンプレートをご用意しております：\n\n✅ お金の設計図\n✅ 健康の設計図\n✅ 仕事・やりがいの設計図\n✅ 人間関係の設計図\n\n※ 現在準備中です。もうしばらくお待ちください。\n\n佐藤勝保（カツヤス）\n一級建築士',
               wrap: true,
               margin: 'md',
             },
@@ -390,18 +390,18 @@ function getReply(text, userName) {
   if (text.includes('外壁修繕') || text.includes('外壁') || text.includes('修繕') || text.includes('屋根')) {
     return {
       type: 'flex',
-      altText: '外壁修繕診断アプリから来てくれたか！',
+      altText: '外壁修繕診断アプリをご利用いただきありがとうございます',
       contents: {
         type: 'bubble',
         body: {
           type: 'box',
           layout: 'vertical',
           contents: [
-            { type: 'text', text: '🏠 外壁修繕診断を使ってくれたか！', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
+            { type: 'text', text: '🏠 外壁修繕診断をご利用いただきありがとうございます', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
             { type: 'separator', margin: 'md' },
             {
               type: 'text',
-              text: '一級建築士として30年、外壁を見てきた俺が作ったアプリだ。\n\n診断結果について疑問があれば何でも聞いてくれ。\n・見積もりが適正か確認したい\n・業者選びに迷っている\n・修繕時期を相談したい\n\n遠慮なく送ってくれ。\nカツヤス',
+              text: '一級建築士として30年、外壁を見てきた経験をもとに作ったアプリです。\n\n診断結果についてご不明な点があれば、お気軽にお尋ねください。\n・見積もりが適正か確認したい\n・業者選びに迷っている\n・修繕時期を相談したい\n\nどうぞ遠慮なくお送りください。\n\n佐藤勝保（カツヤス）\n一級建築士・建築30年',
               wrap: true,
               margin: 'md',
               size: 'sm',
@@ -435,7 +435,7 @@ function getReply(text, userName) {
   ) {
     return {
       type: 'flex',
-      altText: '【登録プレゼント】金持ち脳チェックリスト＋口癖変換カードをお届けします',
+      altText: '【ご登録プレゼント】金持ち脳チェックリスト＋口癖変換カードをお届けします',
       contents: {
         type: 'bubble',
         hero: {
@@ -454,15 +454,14 @@ function getReply(text, userName) {
           contents: [
             {
               type: 'text',
-              text: '本を読んでくれてありがとう。\n\n登録プレゼントを2点用意した。\nスマホに保存して使ってくれ。',
+              text: '本や記事にご関心を持っていただきありがとうございます。\n\nKindle本『貧乏脳と金持ち脳』、またはnoteの記事から来てくださった方へ、ご登録プレゼントを2点ご用意しました。スマホに保存してお使いください。',
               wrap: true,
-              size: 'md',
-              weight: 'bold',
+              size: 'sm',
             },
             { type: 'separator', margin: 'md' },
             {
               type: 'text',
-              text: '✅ A：金持ち脳チェックリスト\n　10項目で今の自分を確認できる\n\n✅ B：口癖変換カード\n　貧乏脳の言葉→金持ち脳の言葉に\n　1週間使うだけで思考が変わる',
+              text: '✅ A：金持ち脳チェックリスト\n　10項目で今の自分を確認できます\n\n✅ B：口癖変換カード\n　貧乏脳の言葉→金持ち脳の言葉へ\n　1週間で思考が変わります\n\n佐藤勝保（カツヤス）\n一級建築士・建築30年',
               wrap: true,
               margin: 'md',
               size: 'sm',
@@ -528,11 +527,11 @@ function getReply(text, userName) {
           type: 'box',
           layout: 'vertical',
           contents: [
-            { type: 'text', text: '📘 リフォーム本を読んでくれてありがとう！', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
+            { type: 'text', text: '📘 リフォーム本に関心を持っていただき、ありがとうございます！', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
             { type: 'separator', margin: 'md' },
             {
               type: 'text',
-              text: '『100万円損しないリフォーム ─業者を見抜く7つの質問』を手に取ってくれてありがとう。\n\n下の「見積書チェックリスト」を、お手元の見積書とあわせて使ってくれ。本書で出てきた7つの質問が、見積書のどこに反映されているかを1項目ずつチェックできる。\n\n何か疑問があれば、このトークでメッセージを送ってくれ。一級建築士として30年の経験から、できる範囲で答える。\n\n佐藤勝保（カツヤス）',
+              text: 'Kindle本『100万円損しないリフォーム ─業者を見抜く7つの質問』、またはnoteの記事から来てくださったかもしれません。\n\n下の「見積書チェックリスト」(PDF)を、お手元の見積書とあわせてお使いください。本書で紹介している7つの質問が、見積書のどこに反映されているかを1項目ずつチェックできます。\n\n何か疑問があれば、このトークでメッセージを送ってください。一級建築士として30年の経験から、できる範囲でお答えします。\n\n佐藤勝保（カツヤス）\n一級建築士',
               wrap: true,
               margin: 'md',
               size: 'sm',
@@ -577,7 +576,7 @@ function getReply(text, userName) {
             { type: 'separator', margin: 'md' },
             {
               type: 'text',
-              text: '個別相談のお問い合わせ、ありがとう。\n\n本相談は、本書『100万円損しないリフォーム』の7つの質問を、あなたのケースに沿って具体的に活用するためのお手伝いだ。\n\n■ 形式：オンライン（Zoom／Meet）または対面（神奈川県相模原市内の貸会議室）\n■ 時間：1案件 60分程度\n■ 料金：¥20,000（税込・モニター価格）\n\n下記の点をご了承ください：\n・特定業者の評価・推奨は行わない\n・最終的な業者選定・契約判断は相談者ご自身\n・建築士法上の「設計」「工事監理」は本相談に含まれない\n\n予約フォーム・規約はリンクから確認してくれ。',
+              text: '個別相談のお問い合わせ、ありがとうございます。\n\n本相談は、書籍『100万円損しないリフォーム』の7つの質問を、ご相談者様のケースに沿って具体的に活用していただくためのお手伝いです。\n\n■ 形式：オンライン（Zoom／Meet）または対面（神奈川県相模原市内の貸会議室）\n■ 時間：1案件 60分程度\n■ 料金：¥20,000（税込・モニター価格）\n\n下記の点をご了承ください：\n・特定業者の評価・推奨は行いません\n・最終的な業者選定・契約判断はご相談者様ご自身となります\n・建築士法上の「設計」「工事監理」は本相談に含まれません\n\n予約フォーム・規約はリンクからご確認ください。\n\n佐藤勝保（カツヤス）\n一級建築士',
               wrap: true,
               margin: 'md',
               size: 'sm',
@@ -605,7 +604,7 @@ function getReply(text, userName) {
   if (text.includes('相談') || text.includes('コンサル') || text.includes('個別')) {
     return {
       type: 'text',
-      text: '📞 個別相談について\n\n以下の相談を受け付けている：\n・老後の資金・生き方相談\n・副業の始め方・失敗しない選び方\n・建築・リフォーム相談（書籍『100万円損しないリフォーム』読者の方は「個別相談希望」と送ってくれ）\n・外壁修繕・業者選び相談\n\n希望の方は「相談希望」と送ってくれ。\n日程を調整する。\n\nカツヤス',
+      text: '📞 個別相談について\n\n以下のご相談を受け付けております：\n・老後の資金・生き方のご相談\n・副業の始め方・失敗しない選び方\n・建築・リフォームのご相談（書籍『100万円損しないリフォーム』の読者の方は「個別相談希望」とお送りください）\n・外壁修繕・業者選びのご相談\n\nご希望の方は「相談希望」とお送りください。日程を調整いたします。\n\n佐藤勝保（カツヤス）\n一級建築士・建築30年',
     };
   }
 
@@ -633,7 +632,7 @@ function getReply(text, userName) {
           contents: [
             {
               type: 'text',
-              text: '投稿を見てくれてありがとう。\n\n家ってのは、見えない土台（基礎・鉄筋）が一番大事だ。体も同じじゃないかと思って、俺はミネラル補給（PHOSSIL）を習慣にしている。\n\n劇的に元気になった、なんて話じゃない。「土台の材料をちゃんと入れてる」という安心感の話だ。\n\n※これはサプリメント（食品）の話です。病気を治すものでも、効果を約束するものでもありません。あくまで一人の体験記録です。\n\nカツヤス',
+              text: '投稿や記事を見ていただきありがとうございます。\n\n家というのは、見えない土台（基礎・鉄筋）が一番大事です。体も同じではないかと思い、私はミネラル補給（PHOSSIL）を習慣にしています。\n\n劇的に元気になった、というような話ではありません。「土台の材料をちゃんと入れている」という安心感の話です。\n\n※これはサプリメント（食品）に関するお話です。病気を治すものでも、効果を約束するものでもありません。あくまで一人の体験記録としてお読みください。\n\n佐藤勝保（カツヤス）\n一級建築士・建築30年',
               wrap: true,
               size: 'sm',
             },
@@ -659,7 +658,7 @@ function getReply(text, userName) {
   // デフォルト返信
   return {
     type: 'text',
-    text: `${userName}さん、メッセージありがとうございます！\n\n本を読んでくれた方は、本の中に書いてある「合言葉」をそのまま送ってください。\nその本専用のプレゼントをお届けします。\n\nカツヤス`,
+    text: `${userName}さん、メッセージありがとうございます。\n\nKindle本またはnote記事から来てくださった方は、本や記事の中に書いてある「合言葉」をそのままお送りください。\nその本・記事専用のプレゼントをお届けします。\n\n佐藤勝保（カツヤス）／一級建築士・建築30年`,
   };
 }
 
@@ -667,7 +666,7 @@ function getReply(text, userName) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.5.2',
+    version: '2.5.3',
     updated: '2026-06-04',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
@@ -687,7 +686,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.5.2',
+    version: '2.5.3',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -696,6 +695,6 @@ app.get('/debug/log', (req, res) => {
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.5.2 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.5.3 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
