@@ -5,6 +5,7 @@
 require('dotenv').config();
 const express = require('express');
 const crypto = require('crypto');
+const path = require('path');
 const line = require('@line/bot-sdk');
 
 const config = {
@@ -24,6 +25,10 @@ const client = new line.messagingApi.MessagingApiClient({
 });
 
 const app = express();
+
+// ── 静的配信（読者特典PDF等）──────────────────────────────
+// public/ 配下を /present で公開。例: /present/checklist_taino_tenken.pdf
+app.use('/present', express.static(path.join(__dirname, 'public')));
 
 // ── デバッグ用リングバッファ（直近100件のイベントログ）─────
 // 秘密情報は載せない（ユーザーID・トークン等は出さない）
@@ -129,7 +134,9 @@ async function handleEvent(event) {
       // 取得失敗は無視
     }
     const reply = getReply(text, userName);
-    await safeReply(event.replyToken, [reply], 'message');
+    // getReply は単一メッセージ（オブジェクト）または複数メッセージ（配列）を返す
+    const messages = Array.isArray(reply) ? reply : [reply];
+    await safeReply(event.replyToken, messages, 'message');
     return;
   }
 
@@ -655,6 +662,99 @@ function getReply(text, userName) {
     };
   }
 
+  // 【合言葉】『50代男の体を“建て直す”』読者特典・自己診断16項目チェックシート
+  // 合言葉: 「体の点検」「からだの点検」「カラダの点検」「体のてんけん」
+  // テキスト本文（あいさつ＋チェックシート）＋ PDF版ダウンロードボタン（Flex）の2通で返す
+  if (
+    text.includes('体の点検') ||
+    text.includes('からだの点検') ||
+    text.includes('カラダの点検') ||
+    text.includes('体のてんけん')
+  ) {
+    return [
+      {
+        type: 'text',
+        text:
+          '合言葉、ありがとうございます。\n' +
+          '『50代男の体を“建て直す”』を読んでくださって、また興味を持ってくださって、ありがとうございます。\n' +
+          '\n' +
+          'お約束の読者特典「自己診断16項目チェックシート」をお届けします。建物の現況調査と同じで、まずは今の自分の状態を正直に把握するところから始めましょう。当てはまる項目に □ をつけて、合計点を数えてみてください。各項目1点です。\n' +
+          '\n' +
+          '【睡眠のこと（各1点）】\n' +
+          '□ 寝付きが悪い（30分以上かかる）\n' +
+          '□ 夜中に目が覚める（週3回以上）\n' +
+          '□ 朝起きたとき体が重い\n' +
+          '□ 昼間に強い眠気が来る\n' +
+          '\n' +
+          '【体型・体重のこと（各1点）】\n' +
+          '□ ウエストが10年前より10cm以上増えた\n' +
+          '□ 体重が10年前より7kg以上増えた\n' +
+          '□ 膝・腰の痛みが慢性化している\n' +
+          '□ 健康診断で「経過観察」項目が増えた\n' +
+          '\n' +
+          '【仕事ぶりのこと（各1点）】\n' +
+          '□ 仕事の集中力が以前より明らかに落ちた\n' +
+          '□ 新しいことを覚えるのが遅くなった\n' +
+          '□ やる気が朝から出ない日が週3日以上ある\n' +
+          '□ 以前できていた量の仕事が、時間内に終わらない\n' +
+          '\n' +
+          '【気分・気持ちのこと（各1点）】\n' +
+          '□ 怒りのコントロールが難しくなってきた\n' +
+          '□ 将来への不安が以前より強い\n' +
+          '□ 趣味や楽しみへの興味が薄れた\n' +
+          '□ 孤独を感じる場面が増えた\n' +
+          '\n' +
+          '【診断結果の読み方】\n' +
+          '0〜3点：要注意フェーズ。まだ大きな問題はありませんが、細かいひびは始まっています。今のうちに手を打てば最小限で済みます。\n' +
+          '4〜8点：修繕着手フェーズ。複数の場所が同時に傷み始めています。一つずつ順番に手を入れていきましょう。\n' +
+          '9〜12点：大規模改修フェーズ。中身を一度すっかり入れ替えるくらいのつもりで取り組む段階です。立て直しは十分できます。\n' +
+          '13点以上：まず専門家へ。セルフケアだけでは追いつかない可能性があります。無理せず、医療機関にご相談ください。\n' +
+          '\n' +
+          'これはあくまで自己診断（セルフチェック）です。診断や治療の代わりになるものではありません。気になる点があれば、かかりつけ医にご相談ください。\n' +
+          '\n' +
+          '下に、印刷して使えるPDF版もご用意しました。よろしければお手元に保存してお使いください。\n' +
+          '\n' +
+          '佐藤勝保（カツヤス）\n' +
+          '一級建築士・建築30年',
+      },
+      {
+        type: 'flex',
+        altText: '自己診断16項目チェックシート（PDF版）をお届けします',
+        contents: {
+          type: 'bubble',
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              { type: 'text', text: '📋 自己診断16項目チェックシート', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
+              { type: 'separator', margin: 'md' },
+              {
+                type: 'text',
+                text: '上のチェックシートのPDF版です。印刷して、点数を書き込みながらお使いいただけます。半年後にもう一度やってみると、ご自分の変化が見えてきます。',
+                wrap: true,
+                margin: 'md',
+                size: 'sm',
+              },
+            ],
+            paddingAll: '20px',
+          },
+          footer: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              {
+                type: 'button',
+                action: { type: 'uri', label: '📋 チェックシート（PDF）を開く', uri: 'https://kind-cooperation-production.up.railway.app/present/checklist_taino_tenken.pdf' },
+                style: 'primary',
+                color: '#0C2448',
+              },
+            ],
+          },
+        },
+      },
+    ];
+  }
+
   // 【合言葉】『俺の会社のCEOは、AIです。』読者プレゼント
   // 合言葉: 「AI社長」「AIシャチョウ」「ＡＩ社長」（全角A）「エーアイ社長」
   // 返すのは「会社の憲法テンプレート」全文（コピーして使うのでプレーンテキスト）
@@ -726,8 +826,8 @@ function getReply(text, userName) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.5.3',
-    updated: '2026-06-04',
+    version: '2.6.0',
+    updated: '2026-06-09',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
@@ -746,7 +846,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.5.3',
+    version: '2.6.0',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -755,6 +855,6 @@ app.get('/debug/log', (req, res) => {
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.5.3 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.6.0 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
