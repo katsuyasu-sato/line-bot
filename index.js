@@ -298,7 +298,7 @@ function getReply(text, userName) {
           contents: [
             {
               type: 'button',
-              action: { type: 'uri', label: '🌿 アロマアプリを受け取る（無料）', uri: 'https://superlative-cendol-797c9a.netlify.app.netlify.app' },
+              action: { type: 'uri', label: '🌿 アロマアプリを受け取る（無料）', uri: 'https://superlative-cendol-797c9a.netlify.app' },
               style: 'primary',
               color: '#2E7D32',
             },
@@ -351,7 +351,7 @@ function getReply(text, userName) {
           contents: [
             {
               type: 'button',
-              action: { type: 'uri', label: '🌿 アロマアプリを受け取る（無料）', uri: 'https://superlative-cendol-797c9a.netlify.app.netlify.app' },
+              action: { type: 'uri', label: '🌿 アロマアプリを受け取る（無料）', uri: 'https://superlative-cendol-797c9a.netlify.app' },
               style: 'primary',
               color: '#2E7D32',
             },
@@ -597,7 +597,7 @@ function getReply(text, userName) {
           contents: [
             {
               type: 'button',
-              action: { type: 'uri', label: '📋 予約フォームを開く', uri: 'https://superlative-cendol-797c9a.netlify.app.netlify.app/reform-consult.html' },
+              action: { type: 'uri', label: '📋 予約フォームを開く', uri: 'https://superlative-cendol-797c9a.netlify.app/reform-consult.html' },
               style: 'primary',
               color: '#0C2448',
             },
