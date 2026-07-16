@@ -815,6 +815,72 @@ function getReply(text, userName) {
     };
   }
 
+  // 【合言葉】『タルムードに学ぶ AI時代のお金の教科書』読者特典・小冊子PDF
+  // 合言葉: 「箱舟」「はこぶね」「ハコブネ」「方舟」
+  // テキスト本文（あいさつ＋小冊子のご案内）＋ PDFダウンロードボタン（Flex）の2通で返す
+  if (
+    text.includes('箱舟') ||
+    text.includes('はこぶね') ||
+    text.includes('ハコブネ') ||
+    text.includes('方舟')
+  ) {
+    return [
+      {
+        type: 'text',
+        text:
+          '合言葉、ありがとうございます。\n' +
+          '『タルムードに学ぶ AI時代のお金の教科書』を読んでくださって、ありがとうございます。\n' +
+          '\n' +
+          'お約束の小冊子「AIとの壁打ちのやり方 ── あなたのための答えを、AIからもらう」をお届けします。\n' +
+          '\n' +
+          'これは、コピペして使えるプロンプト集ではありません。同じ言葉を貼り付ければ、みんな同じ答えが返ってくるだけです。そうではなく、AIと壁打ちをして「あなたの事情に合った答え」を引き出すやり方をまとめました。\n' +
+          '\n' +
+          'お読みになって、試してみて、うまくいかなかった話があれば、ぜひこのトークに送ってください。うまくいった話と同じくらい、うまくいかなかった話を歓迎します。私も五十代から手探りで始めた口です。\n' +
+          '\n' +
+          '下のボタンから小冊子（PDF）を開けます。お手元に保存してお使いください。\n' +
+          '\n' +
+          '佐藤勝保（カツヤス）\n' +
+          '一級建築士・建築30年',
+      },
+      {
+        type: 'flex',
+        altText: '小冊子「AIとの壁打ちのやり方」（PDF）をお届けします',
+        contents: {
+          type: 'bubble',
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              { type: 'text', text: '📖 AIとの壁打ちのやり方', weight: 'bold', size: 'md', color: '#1E3A5F', wrap: true },
+              { type: 'text', text: 'あなたのための答えを、AIからもらう', size: 'sm', color: '#888888', margin: 'sm', wrap: true },
+              { type: 'separator', margin: 'md' },
+              {
+                type: 'text',
+                text: '『タルムードに学ぶ AI時代のお金の教科書』の読者特典です。プロンプト集ではなく、AIと相談しながらご自分の答えを見つけていくための小冊子です。印刷してもお読みいただけます。',
+                wrap: true,
+                margin: 'md',
+                size: 'sm',
+              },
+            ],
+            paddingAll: '20px',
+          },
+          footer: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              {
+                type: 'button',
+                action: { type: 'uri', label: '📖 小冊子を受け取る（無料）', uri: 'https://kind-cooperation-production.up.railway.app/present/kabeuchi_no_yarikata.pdf' },
+                style: 'primary',
+                color: '#1E3A5F',
+              },
+            ],
+          },
+        },
+      },
+    ];
+  }
+
   // デフォルト返信
   return {
     type: 'text',
@@ -826,8 +892,8 @@ function getReply(text, userName) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.6.0',
-    updated: '2026-06-09',
+    version: '2.7.0',
+    updated: '2026-07-17',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
@@ -846,7 +912,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.6.0',
+    version: '2.7.0',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -855,6 +921,6 @@ app.get('/debug/log', (req, res) => {
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.6.0 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.7.0 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
