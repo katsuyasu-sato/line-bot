@@ -125,6 +125,7 @@ async function handleEvent(event) {
   // テキストメッセージ処理
   if (event.type === 'message' && event.message && event.message.type === 'text') {
     const text = (event.message.text || '').trim();
+    const userId = event.source && event.source.userId;
     // ユーザー名は best-effort（失敗してもデフォルト）
     let userName = 'あなた';
     try {
@@ -133,10 +134,23 @@ async function handleEvent(event) {
     } catch (e) {
       // 取得失敗は無視
     }
-    const reply = getReply(text, userName);
+    const reply = getReply(text, userName, userId);
     // getReply は単一メッセージ（オブジェクト）または複数メッセージ（配列）を返す
     const messages = Array.isArray(reply) ? reply : [reply];
     await safeReply(event.replyToken, messages, 'message');
+
+    // ── オーナーへの通知（返信の後に実行。通知の成否は相談者への返信結果に一切影響させない）──
+    // オーナー自身が送ったメッセージには通知しない（無意味・pushMessage無料枠の浪費を避けるため）
+    if (userId && userId !== process.env.OWNER_USER_ID) {
+      const kind = classify(text);
+      if (kind === 'soudan_apply') {
+        await notifyOwner(buildSoudanApplyNotifyText(userName));
+      } else if (kind === 'doterra_interest') {
+        await notifyOwner(buildDoterraInterestNotifyText(userName, text));
+      } else if (kind === 'fallback') {
+        await notifyOwner(buildFallbackNotifyText(userName, text));
+      }
+    }
     return;
   }
 
@@ -204,7 +218,26 @@ function giftMessage(userName) {
 
 
 // ── キーワード別返信 ────────────────────────────────────
-function getReply(text, userName) {
+function getReply(text, userName, userId) {
+
+  // 【最優先】オーナー自身のLINEユーザーID確認用（他のどの合言葉判定よりも先に判定する）
+  // 合言葉: 「マイID」（表記ゆれ4種対応: マイID／マイid／マイＩＤ／マイＩｄ）
+  if (
+    text.includes('マイID') ||
+    text.includes('マイid') ||
+    text.includes('マイＩＤ') ||
+    text.includes('マイＩｄ')
+  ) {
+    return {
+      type: 'text',
+      text:
+        '🔧 あなたのLINEユーザーIDです\n\n' +
+        `${userId || '（取得できませんでした）'}\n\n` +
+        'この文字列をRailwayの環境変数 OWNER_USER_ID に登録すると、\n' +
+        '個別相談の申し込みがこのトークに通知されるようになります。\n\n' +
+        '※このIDは、あなたご自身にしか表示されません。',
+    };
+  }
 
   // 【流入元】副業本
   if (text.includes('副業本') || text.includes('副業')) {
@@ -893,19 +926,166 @@ function getReply(text, userName) {
   // デフォルト返信
   return {
     type: 'text',
-    text: `${userName}さん、メッセージありがとうございます。\n\nKindle本またはnote記事から来てくださった方は、本や記事の中に書いてある「合言葉」をそのままお送りください。\nその本・記事専用のプレゼントをお届けします。\n\nカツヤス`,
+    text: defaultReplyText(userName),
   };
+}
+
+// getReply() のデフォルト返信の文面を作る。classify() の「どの分岐にも当たらない」判定で
+// getReply() の出力と比較するために、文面をここに一本化しておく（二重管理を避ける）。
+function defaultReplyText(userName) {
+  return `${userName}さん、メッセージありがとうございます。\n\nKindle本またはnote記事から来てくださった方は、本や記事の中に書いてある「合言葉」をそのままお送りください。\nその本・記事専用のプレゼントをお届けします。\n\nカツヤス`;
+}
+
+// ── メッセージの分類（オーナー通知の要否判定専用。getReply()の戻り値の形は変えない）──
+// ・'soudan_apply'　　　：相談の申込みが完了した（＝申込通知の対象。リフォーム個別相談の
+// 　　　　　　　　　　　　「個別相談希望」もここに含む。"個別相談希望".includes('相談希望') が
+// 　　　　　　　　　　　　真になるため、意図してこの判定に含めている）
+// ・'doterra_interest'　：本文にdoTERRA/ドテラ関連の語を含む（＝ブランド名を自分から書いた
+// 　　　　　　　　　　　　関心層。通知の対象。快眠・アロマ本など「本の読者」だけの語では
+// 　　　　　　　　　　　　拾わない＝ノイズと無料枠を抑えるためのCEO判断）
+// ・'fallback'　　　　　：どの合言葉にも当たらず、デフォルトの定型文が返された（＝取りこぼし通知の対象）
+// ・null　　　　　　　　：それ以外（通知しない）
+//
+// 判定優先順位（上が強い）：soudan_apply → doterra_interest → fallback → null
+//
+// 「相談希望」分岐の条件式は、getReply() 内の同分岐と完全に同じものにする。
+// 「どの分岐にも当たらない」の判定は、全分岐の条件を並べて否定する二重管理を避けるため、
+// getReply() を実際に呼び出し、その結果がデフォルト文面（defaultReplyText）と一致するかで判定する。
+function classify(text) {
+  if (text.includes('相談希望') || text.includes('そうだん希望')) {
+    return 'soudan_apply';
+  }
+
+  if (text.includes('doTERRA') || text.includes('ドテラ') || text.includes('どてら')) {
+    return 'doterra_interest';
+  }
+
+  const probeName = '__classify_probe__';
+  const probeReply = getReply(text, probeName, null);
+  if (
+    !Array.isArray(probeReply) &&
+    probeReply &&
+    probeReply.type === 'text' &&
+    probeReply.text === defaultReplyText(probeName)
+  ) {
+    return 'fallback';
+  }
+
+  return null;
+}
+
+// ── オーナーへの通知（push） ─────────────────────────────
+// 個別相談の申込み・取りこぼしメッセージを、オーナー本人のLINEトークへ1通pushする。
+// 【設計上の制約】通知の失敗が相談者への返信を絶対に巻き込まないこと。
+//   → 呼び出し元では必ず safeReply() の後に呼ぶ。ここでは必ず try/catch し、例外を外に投げない。
+const notifyCounter = { date: '', count: 0 };
+const NOTIFY_DAILY_LIMIT = 30;
+
+// 日本時間の「今日の日付」を日次上限リセット判定用に返す（Railwayのサーバー時刻はUTCのため明示指定）
+function todayJST() {
+  return new Date().toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+
+// 通知文に載せる「日本時間の日時（YYYY-MM-DD HH:MM）」
+function nowJSTDisplay() {
+  return new Date()
+    .toLocaleString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+    .replace(/\//g, '-');
+}
+
+async function notifyOwner(text) {
+  if (!process.env.OWNER_USER_ID) return; // 未設定なら通知は黙って無効（通常動作には影響しない）
+
+  try {
+    const today = todayJST();
+    if (notifyCounter.date !== today) {
+      notifyCounter.date = today;
+      notifyCounter.count = 0;
+    }
+    if (notifyCounter.count >= NOTIFY_DAILY_LIMIT) {
+      pushLog({ kind: 'notify_skipped_limit', date: today, count: notifyCounter.count });
+      return;
+    }
+    notifyCounter.count += 1;
+
+    await client.pushMessage({
+      to: process.env.OWNER_USER_ID,
+      messages: [{ type: 'text', text }],
+    });
+  } catch (e) {
+    console.error('[NOTIFY] pushMessage failed:', e && e.message);
+    pushLog({ kind: 'notify_error', error: e && e.message });
+  }
+}
+
+// 本文の先頭60字に切り詰める（60字を超えたら末尾に …）。取りこぼし通知・ドテラ関心通知で共用。
+function truncateBody(text) {
+  return text.length > 60 ? `${text.slice(0, 60)}…` : text;
+}
+
+// 申込通知の文面（相談希望・個別相談希望のいずれの合言葉にも反応する共通文面）
+// ※「① 相談内容 ② 希望日程 ③ 形式」の案内は、リフォーム個別相談（予約フォーム案内）では
+// 　起こらないため、両方の場合に当てはまる書き方にしている（案内の重複は相談者側の受付
+// 　メッセージに既にあるため、通知では省く）。
+function buildSoudanApplyNotifyText(userName) {
+  return (
+    '🔔 個別相談のお申し込みが入りました\n\n' +
+    `お名前：${userName}\n` +
+    `受信：${nowJSTDisplay()}\n\n` +
+    'LINEの公式アカウントのトークを開いて\n' +
+    '内容をご確認ください。\n' +
+    '（返信は当日〜翌日中とお伝えしています）'
+  );
+}
+
+// ドテラ関心通知の文面（本文にdoTERRA/ドテラ関連の語を含んでいたとき）
+function buildDoterraInterestNotifyText(userName, text) {
+  return (
+    '🌿 ドテラに関心のある方からメッセージが届きました\n\n' +
+    `お名前：${userName}\n` +
+    `受信：${nowJSTDisplay()}\n` +
+    `本文：${truncateBody(text)}\n\n` +
+    'Botは自動返信を返しています。\n' +
+    '声をおかけするかどうか、トークを開いてご判断ください。'
+  );
+}
+
+// 取りこぼし通知の文面（どの合言葉にも当たらずデフォルト文面を返したとき）
+function buildFallbackNotifyText(userName, text) {
+  const trimmed = truncateBody(text);
+  return (
+    '🔕 Botが答えられないメッセージが届きました\n\n' +
+    `お名前：${userName}\n` +
+    `受信：${nowJSTDisplay()}\n` +
+    `本文：${trimmed}\n\n` +
+    '合言葉に当たらなかったため、定型文を返しています。\n' +
+    '必要ならトークを開いてご返信ください。'
+  );
 }
 
 // ── ヘルスチェック ──────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.8.0',
+    version: '2.9.1',
     updated: '2026-08-05',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
+    owner_notify: !!process.env.OWNER_USER_ID,
   });
 });
 
@@ -921,7 +1101,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.8.0',
+    version: '2.9.1',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -930,6 +1110,6 @@ app.get('/debug/log', (req, res) => {
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.8.0 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.9.1 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
