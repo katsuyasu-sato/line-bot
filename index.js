@@ -316,7 +316,9 @@ function getReply(text, userName) {
 
   // 【合言葉】働く50代の快眠革命 / 朝まで眠れる私に変えた本 読者プレゼント
   // 合言葉: 「快眠」「アロマ本」「doTERRA」「ドテラ」
-  if (text.includes('快眠') || text.includes('アロマ本') || text.includes('doTERRA') || text.includes('ドテラ')) {
+  // ※ doTERRA / ドテラ は「相談」系の語を含む場合、相談導線（下の isSoudan 判定）を優先する
+  const isSoudan = /相談|そうだん|コンサル/.test(text);
+  if (text.includes('快眠') || text.includes('アロマ本') || ((text.includes('doTERRA') || text.includes('ドテラ')) && !isSoudan)) {
     return {
       type: 'flex',
       altText: '【ご登録プレゼント】doTERRAアロマケアガイドアプリをお届けします',
@@ -607,11 +609,20 @@ function getReply(text, userName) {
     };
   }
 
+  // 相談希望（① 相談メニュー末尾の案内の受け皿。ここより上の「個別相談希望／リフォーム相談」
+  // 分岐より後に置くことで、既存のリフォーム個別相談導線を奪わないようにしている）
+  if (text.includes('相談希望') || text.includes('そうだん希望')) {
+    return {
+      type: 'text',
+      text: '📩 ご相談のお申し込みを受け付けました\n\nありがとうございます。カツヤスから折り返しご連絡します。\n\n差し支えなければ、このまま続けて次の3点をお送りください。やり取りが早くなります。\n\n① ご相談の内容（ひとことで結構です）\n② ご希望の日程（第3希望まで）\n③ オンライン（Zoom／Meet）か、お電話か\n\n※ 返信は当日〜翌日中を目安にしています。夜間・早朝にいただいた場合は、翌朝以降のご返信になります。\n\nカツヤス',
+    };
+  }
+
   // 相談
   if (text.includes('相談') || text.includes('コンサル') || text.includes('個別')) {
     return {
       type: 'text',
-      text: '📞 個別相談について\n\n以下のご相談を受け付けております：\n・老後の資金・生き方のご相談\n・副業の始め方・失敗しない選び方\n・建築・リフォームのご相談（書籍『100万円損しないリフォーム』の読者の方は「個別相談希望」とお送りください）\n・外壁修繕・業者選びのご相談\n\nご希望の方は「相談希望」とお送りください。日程を調整いたします。\n\nカツヤス',
+      text: '📞 個別相談について\n\n以下のご相談を受け付けております：\n・老後の資金・生き方のご相談\n・アロマ（doTERRA）の選び方・使い方のご相談\n・副業の始め方・失敗しない選び方\n・建築・リフォームのご相談（書籍『100万円損しないリフォーム』の読者の方は「個別相談希望」とお送りください）\n・外壁修繕・業者選びのご相談\n\nご希望の方は「相談希望」とお送りください。日程を調整いたします。\n\nカツヤス',
     };
   }
 
@@ -890,8 +901,8 @@ function getReply(text, userName) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.7.0',
-    updated: '2026-07-17',
+    version: '2.8.0',
+    updated: '2026-08-05',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
@@ -910,7 +921,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.7.0',
+    version: '2.8.0',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -919,6 +930,6 @@ app.get('/debug/log', (req, res) => {
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.7.0 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.8.0 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
