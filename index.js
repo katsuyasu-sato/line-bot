@@ -126,6 +126,30 @@ async function handleEvent(event) {
   if (event.type === 'message' && event.message && event.message.type === 'text') {
     const text = (event.message.text || '').trim();
     const userId = event.source && event.source.userId;
+
+    // ── 通知テスト（オーナー本人のみ。getReply()/classify() には一切触れず、ここで完結させる）──
+    // オーナーが1人で「OWNER_USER_ID の登録が正しいか」を自己診断できるようにするための分岐。
+    // オーナー以外が同じ文言を送った場合はここに入らず、そのまま通常フロー（getReply）に進む。
+    if (
+      userId &&
+      userId === process.env.OWNER_USER_ID &&
+      (text.includes('通知テスト') ||
+        text.includes('通知てすと') ||
+        text.includes('つうちテスト') ||
+        text.includes('つうちてすと'))
+    ) {
+      // push を先に試す（結果を返信に載せるため）。通知の失敗が返信を巻き込まない設計を守るため、
+      // 想定外の例外もここで catch して 'unknown' として扱う。
+      let result;
+      try {
+        result = await notifyOwner(buildNotifyTestPushText());
+      } catch (e) {
+        result = { ok: false, reason: 'unknown', detail: e && e.message };
+      }
+      await safeReply(event.replyToken, [buildNotifyTestReplyMessage(result)], 'notify_test');
+      return;
+    }
+
     // ユーザー名は best-effort（失敗してもデフォルト）
     let userName = 'あなた';
     try {
@@ -1006,8 +1030,13 @@ function nowJSTDisplay() {
     .replace(/\//g, '-');
 }
 
+// 戻り値（呼び出し側は無視してよい。既存の呼び出しはすべて戻り値を使わない）：
+//   成功              : { ok: true }
+//   送信失敗          : { ok: false, reason: 'send_failed', detail: <エラーメッセージ文字列> }
+//   日次上限に達している: { ok: false, reason: 'daily_limit' }
+//   OWNER_USER_ID 未設定: { ok: false, reason: 'not_configured' }
 async function notifyOwner(text) {
-  if (!process.env.OWNER_USER_ID) return; // 未設定なら通知は黙って無効（通常動作には影響しない）
+  if (!process.env.OWNER_USER_ID) return { ok: false, reason: 'not_configured' }; // 未設定なら通知は黙って無効（通常動作には影響しない）
 
   try {
     const today = todayJST();
@@ -1017,7 +1046,7 @@ async function notifyOwner(text) {
     }
     if (notifyCounter.count >= NOTIFY_DAILY_LIMIT) {
       pushLog({ kind: 'notify_skipped_limit', date: today, count: notifyCounter.count });
-      return;
+      return { ok: false, reason: 'daily_limit' };
     }
     notifyCounter.count += 1;
 
@@ -1025,9 +1054,11 @@ async function notifyOwner(text) {
       to: process.env.OWNER_USER_ID,
       messages: [{ type: 'text', text }],
     });
+    return { ok: true };
   } catch (e) {
     console.error('[NOTIFY] pushMessage failed:', e && e.message);
     pushLog({ kind: 'notify_error', error: e && e.message });
+    return { ok: false, reason: 'send_failed', detail: e && e.message };
   }
 }
 
@@ -1076,11 +1107,62 @@ function buildFallbackNotifyText(userName, text) {
   );
 }
 
+// ── 通知テスト ──────────────────────────────────────────
+// オーナーが1人で「OWNER_USER_ID の登録が正しいか」を自己診断するための機能。
+// push（テスト通知本文）
+function buildNotifyTestPushText() {
+  return (
+    '🔔 通知テスト\n\n' +
+    'これはテスト通知です。\n' +
+    'このメッセージが届いていれば、\n' +
+    '個別相談のお申し込みも同じようにここへ届きます。\n\n' +
+    `受信：${nowJSTDisplay()}`
+  );
+}
+
+// reply（オーナー本人への診断結果）。notifyOwner() の戻り値から出し分ける。
+// ※ reason: 'not_configured' はこの分岐に入らない設計のため、他の失敗理由と同じ
+// 　「送信に失敗しました」表示にフォールバックする（詳細は detail 欄で判別可能）。
+function buildNotifyTestReplyMessage(result) {
+  if (result && result.ok) {
+    return {
+      type: 'text',
+      text:
+        '✅ 通知テスト：送信に成功しました\n\n' +
+        'このトークに、いまテスト通知を1通送りました。\n' +
+        '数秒のうちに届いていれば、通知の設定は正しく完了しています。\n\n' +
+        '（OWNER_USER_ID の値も正しく登録されています）',
+    };
+  }
+
+  if (result && result.reason === 'daily_limit') {
+    return {
+      type: 'text',
+      text:
+        '⚠️ 通知テスト：本日の上限に達しています\n\n' +
+        '通知は1日30通までに制限しています。\n' +
+        '日付が変わればまた送れます。',
+    };
+  }
+
+  const detail = (result && result.detail) || '不明なエラー';
+  return {
+    type: 'text',
+    text:
+      '❌ 通知テスト：送信に失敗しました\n\n' +
+      `理由：${detail}\n\n` +
+      '考えられる原因：\n' +
+      '・LINE公式アカウントの無料メッセージ枠を使い切っている\n' +
+      '・チャネルアクセストークンの期限切れ\n\n' +
+      'この画面をフクにお見せください。',
+  };
+}
+
 // ── ヘルスチェック ──────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.9.1',
+    version: '2.10.0',
     updated: '2026-08-05',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
@@ -1101,7 +1183,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.9.1',
+    version: '2.10.0',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -1110,6 +1192,6 @@ app.get('/debug/log', (req, res) => {
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.9.1 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.10.0 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });
