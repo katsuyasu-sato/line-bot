@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>あなたの経験を、あなたの一冊に。｜経営者・士業のためのKindle出版プロデュース</title>
+<meta name="description" content="話すだけでいい。インタビューからAI活用で執筆・編集・表紙まで一貫制作。出版はご本人のAmazonアカウントで、隣について伴走サポート。一級建築士40年・昭和39年生まれの著者が担当します。">
+<style>
+  /* ============ リセット・基本 ============ */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --navy: #1b2a4d;          /* 藍色（メイン） */
+    --navy-deep: #111c36;     /* 濃藍 */
+    --navy-soft: #2e4370;     /* 明るめ藍 */
+    --gold: #b8933d;          /* 金（アクセント） */
+    --gold-bright: #d4af5a;   /* 明るい金 */
+    --gold-pale: #f3ead2;     /* 淡い金（背景用） */
+    --paper: #faf8f2;         /* 生成り紙色 */
+    --ink: #2b2b30;           /* 本文色 */
+    --ink-soft: #55555e;
+    --white: #ffffff;
+    --line-green: #06c755;
+    --serif: "Yu Mincho", "YuMincho", "游明朝", "Hiragino Mincho ProN", "ヒラギノ明朝 ProN", serif;
+    --sans: "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN", "Yu Gothic Medium", "游ゴシック Medium", "Yu Gothic", "游ゴシック", "Meiryo", sans-serif;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.95;
+    color: var(--ink);
+    background: var(--paper);
+    -webkit-text-size-adjust: 100%;
+  }
+  img, svg { max-width: 100%; height: auto; }
+  a { color: var(--navy-soft); }
+
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 20px; }
+  section { padding: 56px 0; }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: 26px;
+    line-height: 1.5;
+    color: var(--navy);
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .h2-bar {
+    width: 56px; height: 3px;
+    background: var(--gold);
+    margin: 0 auto 32px;
+  }
+  p + p { margin-top: 1em; }
+
+  /* ============ ヒーロー ============ */
+  .hero {
+    background: linear-gradient(160deg, var(--navy-deep) 0%, var(--navy) 55%, var(--navy-soft) 100%);
+    color: var(--white);
+    padding: 64px 0 56px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after { /* 金の飾り線 */
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--gold) 0%, var(--gold-bright) 50%, var(--gold) 100%);
+  }
+  .hero-eyebrow {
+    display: inline-block;
+    border: 1px solid var(--gold-bright);
+    color: var(--gold-bright);
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    padding: 4px 14px;
+    border-radius: 999px;
+    margin-bottom: 22px;
+  }
+  .hero h1 {
+    font-family: var(--serif);
+    font-size: 31px;
+    line-height: 1.55;
+    font-weight: 700;
+    margin-bottom: 20px;
+  }
+  .hero h1 .gold { color: var(--gold-bright); }
+  .hero-lead {
+    font-size: 17px;
+    line-height: 2;
+    color: #e8e6df;
+    margin-bottom: 30px;
+  }
+  .hero-note {
+    font-size: 14px;
+    color: #c9c7bf;
+    margin-top: 18px;
+  }
+
+  /* ============ CTAボタン ============ */
+  .cta-buttons { display: flex; flex-direction: column; gap: 14px; max-width: 430px; }
+  .center .cta-buttons { margin: 0 auto; }
+  .btn {
+    display: block;
+    text-align: center;
+    text-decoration: none;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 17px 20px;
+    border-radius: 10px;
+    line-height: 1.5;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.18);
+  }
+  .btn small { display: block; font-size: 13px; font-weight: 400; opacity: 0.9; }
+  .btn-fb { background: var(--white); color: var(--navy); border: 2px solid var(--gold); }
+  .btn-line { background: var(--line-green); color: var(--white); border: 2px solid var(--line-green); }
+  .cta-soft {
+    font-size: 15px;
+    color: var(--ink-soft);
+    text-align: center;
+    margin-top: 14px;
+  }
+  .hero .cta-soft { color: #c9c7bf; }
+
+  /* ============ こんな方へ ============ */
+  .checklist { list-style: none; margin-top: 8px; }
+  .checklist li {
+    background: var(--white);
+    border: 1px solid #e5e0d2;
+    border-left: 4px solid var(--gold);
+    border-radius: 8px;
+    padding: 15px 18px 15px 46px;
+    margin-bottom: 12px;
+    position: relative;
+    font-size: 16.5px;
+  }
+  .checklist li::before {
+    content: "✔";
+    position: absolute; left: 16px; top: 15px;
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  /* ============ 出版で得られるもの ============ */
+  .benefit-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .benefit {
+    background: var(--white);
+    border: 1px solid #e5e0d2;
+    border-radius: 10px;
+    padding: 22px 20px;
+  }
+  .benefit h3 {
+    font-family: var(--serif);
+    font-size: 19px;
+    color: var(--navy);
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--gold-pale);
+  }
+  .benefit p { font-size: 16px; color: var(--ink-soft); }
+  .disclaimer {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    margin-top: 20px;
+    line-height: 1.8;
+  }
+
+  /* ============ 流れ4ステップ ============ */
+  .steps { counter-reset: step; }
+  .step {
+    background: var(--white);
+    border: 1px solid #e5e0d2;
+    border-radius: 10px;
+    padding: 22px 20px 22px 20px;
+    margin-bottom: 18px;
+    position: relative;
+  }
+  .step-num {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--navy);
+    color: var(--gold-bright);
+    font-family: var(--serif);
+    font-size: 19px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .step h3 { font-size: 19px; color: var(--navy); margin-bottom: 6px; }
+  .step p { font-size: 16px; color: var(--ink-soft); }
+  .step .honest {
+    margin-top: 10px;
+    background: var(--gold-pale);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+
+  /* ============ プロフィール ============ */
+  .profile-sec { background: var(--navy); color: #eceadf; }
+  .profile-sec h2 { color: var(--white); }
+  .photo-ph {
+    width: 168px; height: 168px;
+    margin: 0 auto 24px;
+    border-radius: 50%;
+    border: 3px solid var(--gold-bright);
+    background: var(--navy-soft);
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    font-size: 14px;
+    color: #cfcdc2;
+    line-height: 1.6;
+  }
+  .profile-name {
+    text-align: center;
+    font-family: var(--serif);
+    font-size: 22px;
+    color: var(--white);
+    margin-bottom: 4px;
+  }
+  .profile-title { text-align: center; font-size: 14.5px; color: var(--gold-bright); margin-bottom: 24px; }
+  .profile-sec p { font-size: 16.5px; }
+  .book-card {
+    background: var(--white);
+    color: var(--ink);
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 26px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+  .book-cover {
+    flex: 0 0 84px;
+    width: 84px; height: 120px;
+    background: linear-gradient(160deg, var(--navy) 0%, var(--navy-soft) 100%);
+    border-left: 5px solid var(--gold);
+    border-radius: 3px 6px 6px 3px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--gold-bright);
+    font-family: var(--serif);
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.5;
+    padding: 6px;
+    box-shadow: 2px 3px 8px rgba(0,0,0,0.25);
+  }
+  .book-info { font-size: 14.5px; line-height: 1.7; }
+  .book-info strong { display: block; font-size: 15.5px; color: var(--navy); margin-bottom: 4px; }
+  .book-info a { color: var(--navy-soft); word-break: break-all; }
+  .book-note { font-size: 13.5px; color: #cfcdc2; margin-top: 14px; }
+
+  /* ============ 料金 ============ */
+  .price-card {
+    background: var(--white);
+    border: 2px solid var(--gold);
+    border-radius: 12px;
+    padding: 30px 24px;
+    text-align: center;
+  }
+  .price-label { font-size: 15px; color: var(--ink-soft); margin-bottom: 6px; }
+  .price-main {
+    font-family: var(--serif);
+    font-size: 40px;
+    color: var(--navy);
+    line-height: 1.3;
+  }
+  .price-main .unit { font-size: 20px; white-space: nowrap; }
+  .price-sub { font-size: 14.5px; color: var(--ink-soft); margin-top: 8px; }
+  .price-includes {
+    text-align: left;
+    margin-top: 22px;
+    padding-top: 20px;
+    border-top: 1px dashed #d8d2c0;
+    font-size: 15.5px;
+  }
+  .price-includes li { list-style: none; padding-left: 26px; position: relative; margin-bottom: 8px; }
+  .price-includes li::before { content: "◆"; color: var(--gold); position: absolute; left: 2px; font-size: 13px; }
+  .monitor-box {
+    margin-top: 24px;
+    background: var(--gold-pale);
+    border: 1px solid var(--gold-bright);
+    border-radius: 10px;
+    padding: 20px 18px;
+    text-align: center;
+  }
+  .monitor-box strong { color: var(--navy); font-size: 18px; display: block; margin-bottom: 6px; }
+  .monitor-box p { font-size: 15px; }
+
+  /* ============ FAQ ============ */
+  details {
+    background: var(--white);
+    border: 1px solid #e5e0d2;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 17px 44px 17px 18px;
+    font-weight: 700;
+    font-size: 16.5px;
+    color: var(--navy);
+    position: relative;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after {
+    content: "＋";
+    position: absolute; right: 16px; top: 15px;
+    color: var(--gold);
+    font-size: 20px;
+  }
+  details[open] summary::after { content: "－"; }
+  .faq-a {
+    padding: 0 18px 18px;
+    font-size: 16px;
+    color: var(--ink-soft);
+    border-top: 1px dashed #e5e0d2;
+    padding-top: 14px;
+  }
+
+  /* ============ 最終CTA ============ */
+  .final-cta { background: linear-gradient(160deg, var(--navy-deep) 0%, var(--navy) 100%); color: var(--white); text-align: center; }
+  .final-cta h2 { color: var(--white); }
+  .final-cta .lead { font-size: 17px; color: #e8e6df; margin-bottom: 30px; }
+
+  /* ============ フッター・特商法 ============ */
+  footer {
+    background: var(--navy-deep);
+    color: #b9b7ae;
+    font-size: 13.5px;
+    padding: 36px 0 44px;
+  }
+  footer a { color: var(--gold-bright); }
+  .tokusho {
+    background: var(--paper);
+    padding: 48px 0;
+    border-top: 4px solid var(--gold);
+  }
+  .tokusho h2 { font-size: 21px; }
+  .tokusho table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--white);
+    font-size: 15px;
+  }
+  .tokusho th, .tokusho td {
+    border: 1px solid #e0dac9;
+    padding: 12px 14px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .tokusho th { background: var(--gold-pale); color: var(--navy); width: 34%; font-weight: 700; }
+
+  /* ============ PC表示 ============ */
+  @media (min-width: 700px) {
+    body { font-size: 17.5px; }
+    .hero { padding: 88px 0 72px; }
+    .hero h1 { font-size: 40px; }
+    h2 { font-size: 30px; }
+    .cta-buttons { flex-direction: row; max-width: 640px; }
+    .cta-buttons .btn { flex: 1; }
+    .benefit-grid { grid-template-columns: 1fr 1fr; }
+    .photo-ph { width: 190px; height: 190px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ ① ヘッドライン ============ -->
+<header class="hero">
+  <div class="wrap">
+    <span class="hero-eyebrow">経営者・士業のための Kindle出版プロデュース</span>
+    <h1>「いつか、自分の本を」。<br>その<span class="gold">「いつか」</span>を、<br>今年にしませんか。</h1>
+    <p class="hero-lead">
+      原稿を書く必要はありません。あなたは<strong>2〜4時間、話すだけ</strong>。<br>
+      インタビューでお聞きした経営の歩みを、AIを活用した執筆・編集・表紙デザインで一冊のKindle本に仕上げます。<br>
+      出版は、あなた自身のAmazonアカウントで。私が隣について最後までお付き合いします。
+    </p>
+    <div class="cta-buttons">
+      <a class="btn btn-fb" href="【FBプロフィールURL】">Facebookメッセージで相談<small>無料・まずは雑談からで結構です</small></a>
+      <a class="btn btn-line" href="https://line.me/ti/p/@491fsuyy">LINEで相談<small>無料・一問一答でもOKです</small></a>
+    </div>
+    <p class="hero-note">担当：一級建築士・建築歴40年／昭和39年生まれの昭和男子　佐藤勝保（カツヤス）</p>
+  </div>
+</header>
+
+<!-- ============ ② こんな方へ ============ -->
+<section>
+  <div class="wrap">
+    <h2>こんな方のためのサービスです</h2>
+    <div class="h2-bar"></div>
+    <ul class="checklist">
+      <li>「いつか本を出したい」と思いながら、10年経ってしまった中小企業の社長</li>
+      <li>創業からの歩みや仕事の哲学を、社員や後継者に形として遺したい方</li>
+      <li>税理士・行政書士など、専門知識を一冊にまとめて名刺代わりにしたい士業の方</li>
+      <li>工務店・建設業など、現場で培った経験を言葉にして伝えたい経営者</li>
+      <li>文章を書くのは苦手。でも、話すことなら何時間でもできる——そんな方</li>
+    </ul>
+    <p style="margin-top:24px; font-size:16.5px;">
+      一つでも当てはまったら、このページはあなたのために書きました。<br>
+      逆に「手っ取り早く儲かる本を出したい」という方には、お役に立てません。正直にそう申し上げます。
+    </p>
+  </div>
+</section>
+
+<!-- ============ ③ 出版で得られるもの ============ -->
+<section style="background: var(--gold-pale); padding-top: 56px;">
+  <div class="wrap">
+    <h2>一冊の本が、あなたの代わりに語ってくれます</h2>
+    <div class="h2-bar"></div>
+    <div class="benefit-grid">
+      <div class="benefit">
+        <h3>名刺代わりの一冊に</h3>
+        <p>初対面の相手に、パンフレットの代わりに自著を。「本を書いた人」として自己紹介の重みが変わった、という声があります。</p>
+      </div>
+      <div class="benefit">
+        <h3>商談の場での信頼づくりに</h3>
+        <p>あなたの考え方や実績を、商談の前に相手に読んでおいてもらう。そんな使い方に活用いただけます。</p>
+      </div>
+      <div class="benefit">
+        <h3>採用・社内での理念共有に</h3>
+        <p>求人票では伝わらない「社長の想い」を、応募者や新入社員に一冊で。理念浸透のツールとして活用いただけます。</p>
+      </div>
+      <div class="benefit">
+        <h3>Amazonに、自分の名前が並ぶ</h3>
+        <p>検索すれば、あなたの名前と本が出てくる。ご家族やお孫さんに見せられる、形に残る財産になります。</p>
+      </div>
+    </div>
+    <p class="disclaimer">※ 出版による売上増加や集客効果をお約束するものではありません。本は「あなたの経験と考えを、きちんと伝わる形にする」ための道具です。効果の感じ方には個人差があります。</p>
+  </div>
+</section>
+
+<!-- ============ ④ サービスの流れ ============ -->
+<section>
+  <div class="wrap">
+    <h2>出版までの流れ（4ステップ）</h2>
+    <div class="h2-bar"></div>
+    <div class="steps">
+      <div class="step">
+        <span class="step-num">1</span>
+        <h3>インタビュー（2〜4時間）</h3>
+        <p>Zoomまたは対面で、あなたの歩み・仕事観・伝えたいことをじっくりお聞きします。準備は不要。雑談のつもりでお話しください。聞き出すのは、建築の現場管理で40年、図面の趣旨とお施主さんの意向をくみ取ってきた私の仕事です。</p>
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        <h3>AIを活用した執筆・編集</h3>
+        <p>インタビュー内容をもとに、AIを活用しながら原稿を執筆・編集します。途中で<strong>ご本人チェックを2回</strong>。「これは俺の言葉じゃないな」という箇所は遠慮なく直してください。あなたの語り口に寄せて仕上げます。</p>
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        <h3>表紙・図解デザイン</h3>
+        <p>Amazonの棚で埋もれない表紙と、内容を伝える図解を制作します。私自身の出版で実運用している制作パイプラインを使います。</p>
+      </div>
+      <div class="step">
+        <span class="step-num">4</span>
+        <h3>出版データ納品 ＋ ご本人出版の伴走サポート</h3>
+        <p>出版用データ一式を納品し、<strong>出版はご本人のAmazonアカウント</strong>で行っていただきます。画面共有で隣につき、ボタンを押すところまでお付き合いします。</p>
+        <div class="honest">
+          <strong>なぜ「代わりに出版」しないのか。</strong><br>
+          他人のAmazonアカウントでの入稿代行は、Amazon（KDP）の規約上リスクのある行為です。ですから当サービスは「データ納品＋ご本人出版のサポート」という形を取ります。遠回りに見えて、これがあなたのアカウントと本を守る、いちばん誠実なやり方だと考えています。
+        </div>
+      </div>
+    </div>
+    <p style="text-align:center; font-size:16px; color:var(--ink-soft);">納期の目安：<strong style="color:var(--navy);">1.5〜3ヶ月</strong>（内容・ご本人確認のペースによります）</p>
+  </div>
+</section>
+
+<!-- ============ ⑤ なぜ私がやるのか ============ -->
+<section class="profile-sec">
+  <div class="wrap">
+    <h2>なぜ、私がやるのか</h2>
+    <div class="h2-bar"></div>
+    <div class="photo-ph">【顔写真<br>プレースホルダ】</div>
+    <p class="profile-name">佐藤 勝保（カツヤス）</p>
+    <p class="profile-title">一級建築士（建築歴40年）／ 昭和39年生まれの昭和男子 ／ 神奈川県相模原市在住</p>
+    <p>
+      私は40年、建築の現場管理をしてきました。図面を引いた時期もありますが、長くやってきたのは現場の仕事です。図面片手に外へ出て、図面の趣旨を読み取り、お施主さんがどうしていきたいのかをくみ取りながら、職人と共に建物を完成まで仕上げていく——それが私の本業です。<br>
+      ある時、気づきました。<strong>本づくりも、まったく同じだ</strong>と。
+    </p>
+    <p>
+      経営者の頭の中には、何十年分の判断と失敗と哲学が詰まっています。ただ、それを自分で文章にする時間がない。だから「いつか」のまま止まっている。<br>
+      私はその聞き手になり、AIという道具を使って、従来のゴーストライティング（相場は平均80万円前後と言われます）よりずっと現実的な価格で、一冊に仕上げます。聞いて終わりにはしません。現場監督の仕事と同じで、完成——出版のその日まで仕上げ切るのが私の流儀です。
+    </p>
+    <p>
+      そして何より——私自身が、Kindleで本を出している著者です。理屈ではなく、自分の手でやってきたことをお手伝いします。
+    </p>
+    <div class="book-card">
+      <div class="book-cover">俺の会社の<br>CEOは、<br>AIです。<br>【マンガ版】</div>
+      <div class="book-info">
+        <strong>代表作『俺の会社のCEOは、AIです。【マンガ版】』</strong>
+        Kindleにて発売中。原稿・表紙・マンガ・入稿データまで、AI活用の一貫制作で自ら出版。<br>
+        <a href="https://www.amazon.co.jp/dp/B0H7F9GMNM" target="_blank" rel="noopener">Amazonで見る →</a>
+      </div>
+    </div>
+    <p class="book-note">※ このほかにもKindle本を多数出版。近刊も準備中です。YouTubeチャンネル・LINE公式アカウントも自力で運営しています。</p>
+  </div>
+</section>
+
+<!-- ============ ⑥ 料金 ============ -->
+<section>
+  <div class="wrap">
+    <h2>料金</h2>
+    <div class="h2-bar"></div>
+    <div class="price-card">
+      <p class="price-label">Kindle出版プロデュース　参考価格</p>
+      <p class="price-main">19万8千円<span class="unit">（税込）〜</span></p>
+      <p class="price-sub">内容・分量により最大35万円程度。お見積りは無料です。</p>
+      <ul class="price-includes">
+        <li>インタビュー（2〜4時間・Zoomまたは対面）</li>
+        <li>AIを活用した執筆・編集（ご本人チェック2回）</li>
+        <li>表紙デザイン・図解制作</li>
+        <li>出版用データ一式の納品</li>
+        <li>ご本人アカウントでの出版作業を画面共有で伴走サポート</li>
+      </ul>
+    </div>
+    <div class="monitor-box">
+      <strong>初回モニター3社様 特別価格のご案内</strong>
+      <p>サービス開始にあたり、事例としてご紹介にご協力いただける3社様に限り、<strong>【モニター価格】</strong>にてお受けします。枠が埋まり次第、通常価格となります。</p>
+    </div>
+    <p class="disclaimer">※ ご参考：書籍のゴーストライティングの従来相場は平均80万円前後と言われています。AIを活用した制作工程により、この価格を実現しています。</p>
+  </div>
+</section>
+
+<!-- ============ ⑦ よくある質問 ============ -->
+<section style="background: var(--gold-pale);">
+  <div class="wrap">
+    <h2>よくある質問</h2>
+    <div class="h2-bar"></div>
+
+    <details>
+      <summary>出版まで全部おまかせできますか？</summary>
+      <div class="faq-a">原稿・表紙・出版用データの制作はすべてこちらで行います。ただし<strong>最後の出版（入稿）だけは、ご本人のAmazonアカウントで行っていただきます</strong>。他人のアカウントでの入稿代行はAmazon（KDP）の規約上リスクがあるためです。もちろん、画面共有で隣につき、操作を一つずつご案内しますので、パソコンが苦手な方もご安心ください。</div>
+    </details>
+
+    <details>
+      <summary>AIが書くのですか？ それで「私の本」と言えますか？</summary>
+      <div class="faq-a">執筆・編集の工程でAIを活用することを、隠さず明示しています。ただし、本の中身はすべて<strong>あなたへのインタビューでお聞きした、あなた自身の経験と言葉</strong>が元です。AIは「清書と整理の道具」であり、著者はあくまであなたです。ご本人チェックを2回設けて、「自分の言葉になっているか」を確認しながら進めます。</div>
+    </details>
+
+    <details>
+      <summary>できあがった本の著作権は誰のものですか？</summary>
+      <div class="faq-a"><strong>著作権はご本人（お客様）に帰属します。</strong>売上（KDPのロイヤリティ）も全額ご本人のものです。当方が権利を持つことはありません。事例としてのご紹介は、ご了承いただいた場合のみ行います。</div>
+    </details>
+
+    <details>
+      <summary>話すのが得意ではないのですが、大丈夫でしょうか？</summary>
+      <div class="faq-a">大丈夫です。立て板に水で語っていただく必要はありません。質問をしながら引き出すのが私の役目です。建築の現場管理で40年、施主の「うまく言えないんだけど…」という意向をくみ取りながら建物を仕上げてきました。沈黙も含めて、じっくりお聞きします。</div>
+    </details>
+
+    <details>
+      <summary>本を出せば、売上や集客は増えますか？</summary>
+      <div class="faq-a">正直に申し上げます。<strong>それはお約束できません。</strong>本は魔法の集客装置ではなく、「あなたの経験と考えを、きちんと伝わる形にする」道具です。名刺代わり・商談前の資料・社内の理念共有といった使い方で活用いただくことを想定しています。「出せば儲かる」という類のお話ではない点、ご了承ください。</div>
+    </details>
+
+    <details>
+      <summary>期間はどのくらいかかりますか？</summary>
+      <div class="faq-a">目安は<strong>1.5〜3ヶ月</strong>です。インタビューの日程、ご本人チェックのお戻りのペースによって前後します。「◯月の創業記念日までに」といったご希望があれば、最初にご相談ください。</div>
+    </details>
+
+    <details>
+      <summary>何を準備すればいいですか？</summary>
+      <div class="faq-a">特別な準備は不要です。あえて挙げるなら、Amazonのアカウント（お持ちでなければ取得もサポートします）と、「本にしたい話」を頭の片隅に置いておいていただくことくらいです。資料や過去の社内報などがあれば、参考にさせていただきます。</div>
+    </details>
+  </div>
+</section>
+
+<!-- ============ ⑧ CTA ============ -->
+<section class="final-cta">
+  <div class="wrap center">
+    <h2>まずは、雑談からで結構です</h2>
+    <div class="h2-bar"></div>
+    <p class="lead">
+      「うちの話なんて、本になるのかね」——その確認だけでも構いません。<br>
+      売り込みはしません。話してみて「合わないな」と思ったら、そこで終わりで大丈夫です。<br>
+      昭和男子同士、まずは気楽にどうぞ。
+    </p>
+    <div class="cta-buttons">
+      <a class="btn btn-fb" href="【FBプロフィールURL】">Facebookメッセージで相談<small>無料・まずは雑談からで結構です</small></a>
+      <a class="btn btn-line" href="https://line.me/ti/p/@491fsuyy">LINEで相談<small>無料・一問一答でもOKです</small></a>
+    </div>
+    <p class="cta-soft">ご相談いただいても、こちらからしつこくご連絡することはありません。</p>
+  </div>
+</section>
+
+<!-- ============ 特定商取引法に基づく表記（骨組み） ============ -->
+<section class="tokusho" id="tokusho">
+  <div class="wrap">
+    <h2>特定商取引法に基づく表記</h2>
+    <div class="h2-bar"></div>
+    <table>
+      <tr><th>販売事業者名</th><td>【オーナー記入】</td></tr>
+      <tr><th>運営責任者</th><td>佐藤 勝保</td></tr>
+      <tr><th>所在地</th><td>【オーナー記入】（ご請求があった場合、遅滞なく開示いたします）</td></tr>
+      <tr><th>連絡先</th><td>【オーナー記入】</td></tr>
+      <tr><th>販売価格</th><td>198,000円（税込）〜　※内容により最大35万円程度。個別見積り。</td></tr>
+      <tr><th>商品代金以外の必要料金</th><td>【オーナー記入】（例：対面インタビュー時の交通費実費 など）</td></tr>
+      <tr><th>支払方法・支払時期</th><td>【オーナー記入】</td></tr>
+      <tr><th>役務の提供時期</th><td>ご契約後1.5〜3ヶ月を目安に出版用データ一式を納品</td></tr>
+      <tr><th>キャンセル・返金について</th><td>【オーナー記入】</td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><a href="#tokusho">特定商取引法に基づく表記</a></p>
+    <p style="margin-top:10px;">&copy; 佐藤勝保（カツヤス）　あなたの経験を、あなたの一冊に。</p>
+  </div>
+</footer>
+
+</body>
+</html>
