@@ -7,6 +7,7 @@ const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
 const line = require('@line/bot-sdk');
+const stepDelivery = require('./stepDelivery');
 
 const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET,
@@ -119,6 +120,16 @@ async function handleEvent(event) {
   if (event.type === 'follow') {
     const messages = welcomeMessages('あなた');
     await safeReply(event.replyToken, messages, 'follow');
+    // ステップ配信のために登録日時を記録する（送信はしない）。
+    // ⚠️ reply のあとに呼ぶ。記録の失敗が歓迎メッセージを絶対に巻き込まないこと。
+    stepDelivery.recordFollow(event.source && event.source.userId);
+    return;
+  }
+
+  // ブロック・友だち削除 → ステップ配信の対象から外す
+  if (event.type === 'unfollow') {
+    stepDelivery.recordUnfollow(event.source && event.source.userId);
+    pushLog({ kind: 'unfollow' });
     return;
   }
 
@@ -171,6 +182,8 @@ async function handleEvent(event) {
         await notifyOwner(buildSoudanApplyNotifyText(userName));
       } else if (kind === 'doterra_interest') {
         await notifyOwner(buildDoterraInterestNotifyText(userName, text));
+      } else if (kind === 'step_reply') {
+        await notifyOwner(buildStepReplyNotifyText(userName, text));
       } else if (kind === 'fallback') {
         await notifyOwner(buildFallbackNotifyText(userName, text));
       }
@@ -234,9 +247,31 @@ function welcomeMessages(userName) {
 
 function giftMessage(userName) {
   // ⚠️ follow 時は userName を取得していないので、固定の挨拶にする
+  //
+  // 【2026-09-01 追加】「合言葉を持っていない人」の受け皿。
+  //   Instagramから来た方は本・記事の合言葉を知らないため、旧文面（合言葉の案内だけ）では
+  //   何を送っても買える場所に到達できなかった。IG投稿①③⑥⑦のCTA
+  //   「買える場所は、プロフィールのLINEに置いてあります。」の約束を、ここで果たす。
+  //   🔴 コンプライアンス（rules/compliance.md §7）：
+  //     ・買える場所を「示す」だけに留める＝層1。「登録して」「一緒に」等の誘引語を書かない（層3禁止）。
+  //     ・効能・体調・症状に一切触れない（層2禁止）。
+  //     ・立場表示（ステマ規制対応）を同じ文面に置く＝§7-3 解禁条件1。
+  //   URLは新規に作らず、既存の記述（index.js の「香り」「快眠」分岐の購入ボタン、
+  //   aroma-app/deploy_v2/index.html）と同一のマイショップURLを引いている。
+  //   ※ reply で返す（follow の replyToken 応答）ため、無料枠200通（push）を一切消費しない。
   return {
     type: 'text',
-    text: '友だち追加ありがとうございます。\n一級建築士の佐藤勝保（カツヤス）です。\n\nKindle本またはnote記事から来てくださった方は、本や記事の中に書いてある「合言葉」をこのトークに送ってください。\nその本・記事専用のプレゼントをお届けします。\n\nカツヤス',
+    text:
+      '友だち追加ありがとうございます。\n' +
+      '一級建築士の佐藤勝保（カツヤス）です。\n\n' +
+      '■ Kindle本・note記事から来てくださった方\n' +
+      '本や記事の中に書いてある「合言葉」をこのトークに送ってください。\n' +
+      'その本・記事専用のプレゼントをお届けします。\n\n' +
+      '■ Instagramから来てくださった方\n' +
+      '合言葉はありません。投稿でご紹介したdoTERRA製品を買える場所は、こちらです。\n' +
+      'https://office.doterra.com/katuyasusatou\n\n' +
+      'doTERRA ウェルネスアドボケート 佐藤勝保による個人の発信です（doTERRA公式のものではありません）。\n\n' +
+      'カツヤス',
   };
 }
 
@@ -986,6 +1021,14 @@ function getReply(text, userName, userId) {
     ];
   }
 
+  // ── ステップ配信7日目の3つの言葉（「実家の話」「本の話」「出版の話」）──
+  // 既存の合言葉の判定がすべて終わったあとに置く。これにより既存の分岐を一切上書きしない。
+  // reply なので無料通数を消費しない（プッシュ配信を3通で打ち止めにできる根拠）。
+  const stepReply = stepDelivery.stepKeywordReply(text);
+  if (stepReply) {
+    return stepReply;
+  }
+
   // デフォルト返信
   return {
     type: 'text',
@@ -995,8 +1038,30 @@ function getReply(text, userName, userId) {
 
 // getReply() のデフォルト返信の文面を作る。classify() の「どの分岐にも当たらない」判定で
 // getReply() の出力と比較するために、文面をここに一本化しておく（二重管理を避ける）。
+//
+// 【2026-09-01 追加】「合言葉を持っていない人」の受け皿。
+//   合言葉に一致しなかった場合でも、買える場所への案内がここで必ず届く。
+//   🔴 この関数は classify() の 'fallback' 判定（getReply() の戻り値との文字列一致）にも
+//      使われている。文面をここ1箇所に集約したまま変更しているため、判定は従来どおり動く。
+//      🔴 戻り値を配列（複数メッセージ）にしたり type を変えたりすると fallback 判定が壊れる。
+//         必ず「単一の text メッセージ」のままにすること。
+//   🔴 コンプライアンス（rules/compliance.md §7）：層1（買える場所を示す）まで。
+//      層3の誘引語（登録／会員／割引／一緒に／仲間 等）と層2の効能表現は1語も置かない。
+//   ※ reply で返すため無料枠200通（push）を消費しない。
 function defaultReplyText(userName) {
-  return `${userName}さん、メッセージありがとうございます。\n\nKindle本またはnote記事から来てくださった方は、本や記事の中に書いてある「合言葉」をそのままお送りください。\nその本・記事専用のプレゼントをお届けします。\n\nカツヤス`;
+  return (
+    `${userName}さん、メッセージありがとうございます。\n\n` +
+    'いただいた言葉に合う「合言葉」が見つかりませんでした。\n' +
+    'お手数ですが、下のどちらかをご覧ください。\n\n' +
+    '■ Kindle本・note記事から来てくださった方\n' +
+    '本や記事の中に書いてある「合言葉」をそのままお送りください。\n' +
+    'その本・記事専用のプレゼントをお届けします。\n\n' +
+    '■ Instagramから来てくださった方\n' +
+    '合言葉はありません。投稿でご紹介したdoTERRA製品を買える場所は、こちらです。\n' +
+    'https://office.doterra.com/katuyasusatou\n\n' +
+    'doTERRA ウェルネスアドボケート 佐藤勝保による個人の発信です（doTERRA公式のものではありません）。\n\n' +
+    'カツヤス'
+  );
 }
 
 // ── メッセージの分類（オーナー通知の要否判定専用。getReply()の戻り値の形は変えない）──
@@ -1021,6 +1086,12 @@ function classify(text) {
 
   if (text.includes('doTERRA') || text.includes('ドテラ') || text.includes('どてら')) {
     return 'doterra_interest';
+  }
+
+  // ステップ配信7日目の3つの言葉。以前はどの分岐にも当たらず 'fallback' として通知されていたので、
+  // 通知が出る点は変わらない。どれを選ばれたかが分かるように専用の種別にしただけ。
+  if (stepDelivery.isStepKeyword(text)) {
+    return 'step_reply';
   }
 
   const probeName = '__classify_probe__';
@@ -1146,6 +1217,23 @@ function buildFallbackNotifyText(userName, text) {
   );
 }
 
+// ステップ配信7日目の言葉が返ってきたときの通知文（どの出口を選ばれたかが分かるようにする）
+function buildStepReplyNotifyText(userName, text) {
+  let which = 'いずれか';
+  if (text.includes('実家の話')) which = '実家の話（建物の相談）';
+  else if (text.includes('本の話')) which = '本の話（Kindle）';
+  else if (text.includes('出版の話')) which = '出版の話（制作代行）';
+
+  return (
+    '📮 ステップ配信から反応がありました\n\n' +
+    `お名前：${userName}\n` +
+    `受信：${nowJSTDisplay()}\n` +
+    `選ばれた話：${which}\n\n` +
+    'Botは受付の返信を返しています。\n' +
+    'トークを開いてご対応ください。'
+  );
+}
+
 // ── 通知テスト ──────────────────────────────────────────
 // オーナーが1人で「OWNER_USER_ID の登録が正しいか」を自己診断するための機能。
 // push（テスト通知本文）
@@ -1201,8 +1289,8 @@ function buildNotifyTestReplyMessage(result) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.10.1',
-    updated: '2026-08-23',
+    version: '2.11.0',
+    updated: '2026-08-22',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
@@ -1222,15 +1310,65 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.10.1',
+    version: '2.11.0',
     count: debugLog.length,
     entries: debugLog,
   });
 });
 
+// ── ステップ配信の確認用エンドポイント ────────────────────
+// すべて DEBUG_TOKEN で保護し、未設定なら 404 で存在自体を隠す（既存の /debug/log と同じ方式）。
+// ⚠️ ユーザーIDは一切返さない。件数だけを返す。
+function requireDebugToken(req, res) {
+  const required = process.env.DEBUG_TOKEN;
+  if (!required) {
+    res.status(404).json({ error: 'not found' });
+    return false;
+  }
+  if (req.query.token !== required) {
+    res.status(401).json({ error: 'unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+// 状態の確認: /debug/step?token=<DEBUG_TOKEN>
+app.get('/debug/step', (req, res) => {
+  if (!requireDebugToken(req, res)) return;
+  res.json(stepDelivery.getStatus());
+});
+
+// 文面の確認（送信しない）: /debug/step/preview?token=<DEBUG_TOKEN>
+app.get('/debug/step/preview', (req, res) => {
+  if (!requireDebugToken(req, res)) return;
+  res.json({ steps: stepDelivery.previewSteps() });
+});
+
+// 残通数の確認: /debug/step/quota?token=<DEBUG_TOKEN>
+app.get('/debug/step/quota', (req, res) => {
+  if (!requireDebugToken(req, res)) return;
+  stepDelivery
+    .checkQuota()
+    .then((q) => res.json(q))
+    .catch((e) => res.status(500).json({ ok: false, detail: e && e.message }));
+});
+
+// 手動でtickを1回動かす（時刻の条件だけ無視する。配信フラグ・ドライラン・残通数の
+// 安全装置はそのまま効くので、既定ではここを叩いても送信は起きない）:
+//   /debug/step/run?token=<DEBUG_TOKEN>
+app.get('/debug/step/run', (req, res) => {
+  if (!requireDebugToken(req, res)) return;
+  stepDelivery
+    .runTick({ force: true })
+    .then((r) => res.json(r))
+    .catch((e) => res.status(500).json({ error: e && e.message }));
+});
+
 // ── サーバー起動 ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`LINE Bot v2.10.1 起動中: http://localhost:${PORT}`);
+  console.log(`LINE Bot v2.11.0 起動中: http://localhost:${PORT}`);
   console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
+  // ステップ配信の初期化（既定では配信フラグがオフなので、何も送らない）
+  stepDelivery.init({ client, pushLog });
 });
