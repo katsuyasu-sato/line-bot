@@ -868,6 +868,68 @@ function getReply(text, userName, userId) {
   //   };
   // }
 
+  // 【合言葉】IG連載『家は、見えないところから傷む』第1話・読者特典「家のカビが出る場所・点検表」
+  // 合言葉: 「点検表」「てんけん表」「点検ひょう」「テンケン表」「てんけんひょう」
+  // テキスト本文（あいさつ＋説明）＋ PDF版ダウンロードボタン（Flex）の2通で返す
+  // ※「体の点検」分岐より前に置き、より限定的な語を先に評価する
+  if (
+    text.includes('点検表') ||
+    text.includes('てんけん表') ||
+    text.includes('点検ひょう') ||
+    text.includes('テンケン表') ||
+    text.includes('てんけんひょう')
+  ) {
+    return [
+      {
+        type: 'text',
+        text:
+          '合言葉、ありがとうございます。\n' +
+          'IGの投稿「家は、見えないところから傷む」を見てくださって、ありがとうございます。\n' +
+          '\n' +
+          'お約束の「家のカビが出る場所・点検表」をお届けします。建物をつくる仕事を30年している中で、家に上がったときに私が先に見る場所を、A4・1枚にまとめました。直し方は書いていません。場所と、見方だけです。\n' +
+          '\n' +
+          '下のPDFを開いて、印刷して、実家に行くときに持って行ってください。\n' +
+          '\n' +
+          'カツヤス',
+      },
+      {
+        type: 'flex',
+        altText: '「家のカビが出る場所・点検表」（PDF版）をお届けします',
+        contents: {
+          type: 'bubble',
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              { type: 'text', text: '🏠 家のカビが出る場所・点検表', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
+              { type: 'separator', margin: 'md' },
+              {
+                type: 'text',
+                text: '上の点検表のPDF版です。印刷して、実家に行くときに持って行ってください。',
+                wrap: true,
+                margin: 'md',
+                size: 'sm',
+              },
+            ],
+            paddingAll: '20px',
+          },
+          footer: {
+            type: 'box',
+            layout: 'vertical',
+            contents: [
+              {
+                type: 'button',
+                action: { type: 'uri', label: '🏠 点検表（PDF）を開く', uri: 'https://kind-cooperation-production.up.railway.app/present/tenkenhyo.pdf' },
+                style: 'primary',
+                color: '#0C2448',
+              },
+            ],
+          },
+        },
+      },
+    ];
+  }
+
   // 【合言葉】『50代男の体を“建て直す”』読者特典・自己診断16項目チェックシート
   // 合言葉: 「体の点検」「からだの点検」「カラダの点検」「体のてんけん」
   // テキスト本文（あいさつ＋チェックシート）＋ PDF版ダウンロードボタン（Flex）の2通で返す
