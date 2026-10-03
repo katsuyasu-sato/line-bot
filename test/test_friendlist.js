@@ -94,7 +94,7 @@ const msg = (u, t) => ({ type: 'message', replyToken: 'rt', source: { type: 'use
   stub.failures.push = false;
   // C2b. 利用目的の1文
   const welcome = JSON.stringify(stub.calls.reply[0].messages);
-  ok(welcome.includes('お名前は、ご相談へのお返事のためだけに控えています。'), 'C2b followの返信に利用目的の1文がある');
+  ok(welcome.includes('お名前と、最初に送っていただいた言葉は、私の手元に控えています。ご相談へのお返事と、私の発信を見直すためだけに使います。'), 'C2b followの返信に利用目的の1文がある');
 
   // D. follow記録なしの人のmessage
   await sendWebhook(port, [msg('U_OLD', '図面')]); await sleep(200);
