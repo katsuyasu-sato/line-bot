@@ -12,6 +12,9 @@ const { app } = require('../index');
 
 const scratch = process.argv[2];
 if (!scratch || /^C:.Users.katsu.Dropbox/i.test(path.resolve(scratch))) { console.error('Dropbox外のスクラッチフォルダを指定してください'); process.exit(2); }
+// R5：毎回まっさらな一時ボリュームで実行する
+fs.rmSync(path.join(scratch, 'volume'), { recursive: true, force: true });
+fs.rmSync(path.join(scratch, 'LINE友だち名簿'), { recursive: true, force: true });
 fs.mkdirSync(scratch, { recursive: true });
 process.env.STEP_DATA_DIR = path.join(scratch, 'volume');
 friendList.init();
@@ -56,6 +59,23 @@ function runPy(port, tokenFile, outDir) {
   const sizeBefore = fs.statSync(path.join(out, 'LINE友だち名簿.csv')).size;
   r = await runPy(port, badToken, out); console.log('exit', r.code); console.log(r.out);
   console.log('名簿サイズ 前/後:', sizeBefore, fs.statSync(path.join(out, 'LINE友だち名簿.csv')).size);
+
+  console.log('--- 4. 履歴の90日掃除（古い履歴は消え、最新CSVと新しい履歴は残る）---');
+  const hist = path.join(out, '履歴');
+  fs.writeFileSync(path.join(hist, 'LINE友だち名簿_2020-01-01.csv'), 'old');
+  const d = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  fs.writeFileSync(path.join(hist, `LINE友だち名簿_${d}.csv`), 'recent');
+  fs.writeFileSync(path.join(hist, 'メモ.txt'), 'other');
+  r = await runPy(port, goodToken, out); console.log('exit', r.code); console.log(r.out);
+  console.log('履歴フォルダ:', fs.readdirSync(hist).join(', '));
+
+  console.log('--- 5. Excelで開いたまま（読み取り共有のみでロック）---');
+  const latest = path.join(out, 'LINE友だち名簿.csv');
+  const lock = spawn('python', ['-c', `import ctypes,time;k=ctypes.windll.kernel32;k.CreateFileW.restype=ctypes.c_void_p;h=k.CreateFileW(r'${latest}',0x80000000,1,None,3,0x80,None);print('locked',h!=ctypes.c_void_p(-1).value,flush=True);time.sleep(8)`]);
+  await new Promise((res) => lock.stdout.once('data', (x) => { console.log(String(x).trim()); res(); }));
+  r = await runPy(port, goodToken, out); console.log('exit', r.code); console.log(r.out);
+  console.log('tmpが残っていないか:', fs.readdirSync(out).concat(fs.readdirSync(hist)).filter((f) => f.endsWith('.tmp')).length === 0 ? '残っていない' : '残っている');
+  lock.kill();
 
   console.log('--- 出力ファイル ---');
   for (const f of [path.join(out, 'LINE友だち名簿.csv'), ...fs.readdirSync(path.join(out, '履歴')).map((x) => path.join(out, '履歴', x))]) console.log(f);

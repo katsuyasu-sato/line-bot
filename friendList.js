@@ -43,10 +43,29 @@ function loadStore() {
     fs.mkdirSync(dir, { recursive: true });
     storeFile = path.join(dir, 'friends.json');
     if (fs.existsSync(storeFile)) {
-      const parsed = JSON.parse(fs.readFileSync(storeFile, 'utf8'));
-      if (parsed && parsed.friends && typeof parsed.friends === 'object') {
-        store.friends = parsed.friends;
+      let parsed = null;
+      try {
+        parsed = JSON.parse(fs.readFileSync(storeFile, 'utf8'));
+        if (!parsed || !parsed.friends || typeof parsed.friends !== 'object') throw new Error('shape');
+      } catch (e) {
+        // 🔴 読めない名簿を空の名簿で上書きしない。まず friends.json.broken-<日時> に退避する。
+        // ログには内容・メッセージを出さない（JSONの解析エラーは本文の一部を含むため。固定文言と e.name のみ）。
+        const backup = storeFile + '.broken-' + new Date().toISOString().replace(/[:.]/g, '-');
+        console.error('[FRIENDS] 名簿ファイルを読めませんでした（' + (e && e.name) + '）。退避します。');
+        try {
+          fs.renameSync(storeFile, backup);
+        } catch (e2) {
+          // 退避もできないなら、元ファイルを守るため保存を無効にして終える（上書きしない）
+          storeFile = '';
+          persistent = false;
+          persistReason = 'broken_and_backup_failed';
+          return;
+        }
+        store.friends = {};
+        persistReason = 'recovered_from_broken';
+        parsed = null;
       }
+      if (parsed) store.friends = parsed.friends;
     }
     if (!saveStore()) {
       persistent = false;
@@ -54,11 +73,11 @@ function loadStore() {
       return;
     }
     persistent = true;
-    persistReason = 'ok';
+    if (persistReason !== 'recovered_from_broken') persistReason = 'ok';
   } catch (e) {
     persistent = false;
     persistReason = 'io_error';
-    console.error('[FRIENDS] 名簿の読み込みに失敗:', e && e.message);
+    console.error('[FRIENDS] 名簿の読み込みに失敗（' + (e && e.name) + '）');
   }
 }
 
@@ -70,7 +89,7 @@ function saveStore() {
     fs.renameSync(tmp, storeFile);
     return true;
   } catch (e) {
-    console.error('[FRIENDS] 名簿の保存に失敗:', e && e.message);
+    console.error('[FRIENDS] 名簿の保存に失敗（' + (e && e.name) + '）');
     persistent = false;
     persistReason = 'save_failed';
     return false;
@@ -183,7 +202,7 @@ function recordFollow(userId) {
     saveStore();
     return { isNew: !existed, isRefollow, refollowCount: rec.refollowCount };
   } catch (e) {
-    console.error('[FRIENDS] recordFollow 失敗:', e && e.message);
+    console.error('[FRIENDS] recordFollow 失敗（' + (e && e.name) + '）');
     return null;
   }
 }
@@ -199,7 +218,7 @@ function setDisplayName(userId, displayName) {
       saveStore();
     }
   } catch (e) {
-    console.error('[FRIENDS] setDisplayName 失敗:', e && e.message);
+    console.error('[FRIENDS] setDisplayName 失敗（' + (e && e.name) + '）');
   }
 }
 
@@ -213,7 +232,7 @@ function recordUnfollow(userId) {
     rec.lastBlockedAt = now;
     saveStore();
   } catch (e) {
-    console.error('[FRIENDS] recordUnfollow 失敗:', e && e.message);
+    console.error('[FRIENDS] recordUnfollow 失敗（' + (e && e.name) + '）');
   }
 }
 
@@ -221,9 +240,10 @@ function recordUnfollow(userId) {
 // follow記録がない人は followedAt=null（不明）のまま名簿に入る。
 function recordMessage(userId, opts = {}) {
   try {
-    if (!userId) return;
+    if (!userId) return null;
     const now = nowIso();
     const rec = getOrCreate(userId, now);
+    let newEntry = null;
     rec.lastMessageAt = now;
     rec.messageCount += 1;
     rec.blockedAt = null; // メッセージが届く＝友だちでいる
@@ -233,11 +253,13 @@ function recordMessage(userId, opts = {}) {
       if (entry) {
         rec.entry = entry;
         rec.entryAt = now;
+        newEntry = entry; // 呼び出し側が「入口が初めて分かった」通知に使う（1人1回）
       }
     }
     saveStore();
+    return { newEntry, displayName: rec.displayName };
   } catch (e) {
-    console.error('[FRIENDS] recordMessage 失敗:', e && e.message);
+    console.error('[FRIENDS] recordMessage 失敗（' + (e && e.name) + '）');
   }
 }
 
@@ -336,7 +358,12 @@ function toHtml(ownerId, csvHref) {
   );
 }
 
-// 状態確認用（個人情報は返さない。件数だけ）
+// /health 用：永続化の有無と理由だけ。人数は出さない（人数は名簿ページ＝トークン付きにだけ出す）
+function getHealth() {
+  return { persistent, persistReason };
+}
+
+// 名簿ページ用の状態（トークン付きの画面でだけ使う）
 function getStatus() {
   const all = Object.values(store.friends);
   return {
@@ -364,6 +391,6 @@ function _getRecordForTest(userId) {
 }
 
 module.exports = {
-  init, detectEntry, recordFollow, setDisplayName, recordUnfollow, recordMessage,
+  init, getHealth, detectEntry, recordFollow, setDisplayName, recordUnfollow, recordMessage,
   listRows, toCsv, toHtml, getStatus, isPersistent, _resetForTest, _getRecordForTest,
 };

@@ -81,6 +81,21 @@ const msg = (u, t) => ({ type: 'message', replyToken: 'rt', source: { type: 'use
   const fp = stub.calls.push.filter((p) => p.messages[0].text.includes('新しい友だち'));
   ok(fp.length === 2 && fp[1].messages[0].text.includes('再追加（1回目）'), 'C11 再followも通知1通（再追加と明記）', fp.length);
 
+  // C2. 入口が初めて分かったときの通知（1人1回・オーナー本人には送らない）
+  const entryPushes = () => stub.calls.push.filter((p) => p.messages[0].text.includes('友だちの入口が分かりました'));
+  ok(entryPushes().length === 1 && entryPushes()[0].messages[0].text.includes('田中太郎(試験)') && entryPushes()[0].messages[0].text.includes('「箱舟」'), 'C2-1 最初の合言葉で入口通知が1通（箱舟）', entryPushes().length);
+  await sendWebhook(port, [msg('U_OWNER_TEST', '図面')]); await sleep(150);
+  ok(entryPushes().length === 1, 'C2-3 オーナー本人の合言葉では入口通知を送らない');
+  stub.failures.push = true;
+  const rb0 = stub.calls.reply.length;
+  stub.profiles['U_ENT'] = '入口試験(試験)';
+  await sendWebhook(port, [msg('U_ENT', 'AI社長')]); await sleep(150);
+  ok(stub.calls.reply.length === rb0 + 1 && friendList._getRecordForTest('U_ENT').entry === 'AI社長', 'C2-4 入口通知のpushが失敗しても返信は出て入口は記録される');
+  stub.failures.push = false;
+  // C2b. 利用目的の1文
+  const welcome = JSON.stringify(stub.calls.reply[0].messages);
+  ok(welcome.includes('お名前は、ご相談へのお返事のためだけに控えています。'), 'C2b followの返信に利用目的の1文がある');
+
   // D. follow記録なしの人のmessage
   await sendWebhook(port, [msg('U_OLD', '図面')]); await sleep(200);
   rec = friendList._getRecordForTest('U_OLD');
@@ -105,14 +120,14 @@ const msg = (u, t) => ({ type: 'message', replyToken: 'rt', source: { type: 'use
   ok((await q('/admin/friends?token=wrong')).status === 401, 'F3 誤りトークン→401');
   ok((await q('/admin/friends.csv?token=debug_token_for_test')).status === 401, 'F4 DEBUG_TOKENでは開かない→401');
   const html = await q('/admin/friends?token=list_token_for_test');
-  ok(html.status === 200 && html.buf.toString().includes('田中太郎(試験)') && html.headers['cache-control'] === 'no-store', 'F5 正しいトークンでHTML一覧(200,no-store)');
+  ok(html.status === 200 && /名簿 \d+ 人/.test(html.buf.toString()) && html.buf.toString().includes('田中太郎(試験)') && html.headers['cache-control'] === 'no-store', 'F5 正しいトークンでHTML一覧(200,no-store)');
   const csv = await q('/admin/friends.csv', { 'x-list-token': 'list_token_for_test' });
   ok(csv.status === 200 && csv.buf[0] === 0xEF && csv.buf[1] === 0xBB && csv.buf[2] === 0xBF, 'F6 ヘッダのトークンでCSV・UTF-8 BOM付き');
   const text = csv.buf.toString('utf8');
   ok(text.includes('田中太郎(試験)') && text.includes('"箱舟"') && text.includes('"オーナー"'), 'F7 CSVに表示名・入口・オーナー区分');
   ok(!text.includes('"=HYPERLINK') && text.includes('"\'=HYPERLINK'), 'F8 先頭が = の表示名は式として出ない');
   const health = JSON.parse((await q('/health')).buf.toString());
-  ok(health.version === '2.15.0' && health.friend_list.persistent === true && !JSON.stringify(health).includes('田中'), 'F9 /healthに2.15.0と件数のみ（名前なし）', health.friend_list);
+  ok(health.version === '2.16.0' && health.friend_list.persistent === true && !('friendsTotal' in health.friend_list) && !('friendsActive' in health.friend_list) && !JSON.stringify(health).includes('田中'), 'F9 /healthは2.16.0・persistentのみ（人数も名前も出さない）', health.friend_list);
   const saved = fs.readFileSync(path.join(tmp, 'friends.json'), 'utf8');
   ok(saved.includes('U_ALICE'), 'F10 ボリュームにfriends.jsonが書かれている');
 
@@ -128,6 +143,24 @@ const msg = (u, t) => ({ type: 'message', replyToken: 'rt', source: { type: 'use
   ok(stub.calls.reply.length === rb2 + 1, 'H1 保存に失敗しても利用者への返信は出る');
   ok(friendList.getStatus().persistent === false, 'H2 保存失敗でpersistent:falseになる', friendList.getStatus());
   fs.rmSync(tmp, { force: true });
+
+  // C3. 壊れたfriends.jsonは退避され、空で上書きされない。ログに表示名が出ない
+  const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'friends_broken_'));
+  process.env.STEP_DATA_DIR = tmp2;
+  fs.writeFileSync(path.join(tmp2, 'friends.json'), '{"friends":{"U_X":{"displayName":"秘密の表示名(試験)"'); // 途中で切れたJSON
+  const logs = []; const oe = console.error, ol = console.log, ow = console.warn;
+  console.error = (...a) => logs.push(a.join(' ')); console.log = (...a) => logs.push(a.join(' ')); console.warn = (...a) => logs.push(a.join(' '));
+  friendList._resetForTest(); friendList.init();
+  console.error = oe; console.log = ol; console.warn = ow;
+  const files = fs.readdirSync(tmp2);
+  const broken = files.filter((f) => f.startsWith('friends.json.broken-'));
+  ok(broken.length === 1 && fs.readFileSync(path.join(tmp2, broken[0]), 'utf8').includes('秘密の表示名(試験)'), 'C3-1 壊れたJSONが friends.json.broken-<日時> に退避され中身が残る', files);
+  ok(friendList.getStatus().persistent === true && friendList.getStatus().friendsTotal === 0, 'C3-2 退避後は空の名簿で動き始める', friendList.getStatus());
+  ok(!logs.join(' ').includes('秘密の表示名') && !logs.join(' ').includes('Unexpected') && logs.some((l) => l.includes('読めませんでした')), 'C3-3 ログに表示名・解析エラー本文が出ず、固定文言が出る', logs);
+  // 陽性対照：e.message を出す実装なら検出できる文字列が JSON.parse に実在する
+  let msgText = ''; try { JSON.parse('{"friends":{"U_X":{"displayName":"秘密の表示名(試験)"'); } catch (e) { msgText = e.message; }
+  ok(/Unexpected|Expected|JSON/.test(msgText), 'C3-4 陽性対照：JSONの解析エラー文は実在する（出していれば検出される）', msgText);
+  fs.rmSync(tmp2, { recursive: true, force: true });
 
   // I. 入口判定の表
   const cases = { '図面': '図面', '設計図面': '図面', '快眠': '快眠', 'ドテラ': '快眠', 'ドテラについて相談': '相談', 'アロマ本': '快眠', '体の点検': '体の点検', '点検表': '点検表', 'AI社長': 'AI社長', '名刺': '名刺', 'マイID': null, 'こんにちは': null, '空き家': null, 'ミネラル': null };

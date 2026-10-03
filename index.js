@@ -208,7 +208,16 @@ async function handleEvent(event) {
     const messages = Array.isArray(reply) ? reply : [reply];
     await safeReply(event.replyToken, messages, 'message');
     // 友だち名簿（2026-10-04）：返信の後に記録。例外は friendList 内で握りつぶす。
-    friendList.recordMessage(userId, { displayName: fetchedName, text });
+    const friendResult = friendList.recordMessage(userId, { displayName: fetchedName, text });
+    // 【オーナー裁定 2026-10-04】入口の合言葉が最初に届いたとき、オーナーへ1人1回だけ通知する。
+    // オーナー本人には送らない。失敗しても握りつぶす（返信は送信済み）。上限は notifyOwner の既存ルールに従う。
+    if (friendResult && friendResult.newEntry && userId !== process.env.OWNER_USER_ID) {
+      try {
+        await notifyOwner(buildFriendEntryNotifyText(friendResult.displayName || fetchedName, friendResult.newEntry));
+      } catch (e) {
+        // 通知の失敗は無視
+      }
+    }
 
     // ── オーナーへの通知（返信の後に実行。通知の成否は相談者への返信結果に一切影響させない）──
     // オーナー自身が送ったメッセージには通知しない（無意味・pushMessage無料枠の浪費を避けるため）
@@ -480,6 +489,7 @@ function giftMessage(userName) {
       '合言葉はありません。投稿でご紹介したdoTERRA製品を買える場所は、こちらです。\n' +
       'https://office.doterra.com/katuyasusatou\n\n' +
       'doTERRA ウェルネス・アドボケイト 佐藤勝保による個人の発信です（doTERRA公式のものではありません）。\n\n' +
+      'お名前は、ご相談へのお返事のためだけに控えています。\n\n' +
       'カツヤス',
   };
 }
@@ -1807,6 +1817,17 @@ function buildNewFriendNotifyText(displayName, result) {
   );
 }
 
+// 友だちの入口（最初の合言葉）が分かったときの通知文面（2026-10-04追加。1人1回）
+function buildFriendEntryNotifyText(displayName, entry) {
+  return (
+    '🔑 友だちの入口が分かりました\n\n' +
+    `お名前：${displayName || '（取得できていません）'}\n` +
+    `入口の合言葉：「${entry}」\n` +
+    `受信：${nowJSTDisplay()}\n\n` +
+    '名簿ページで一覧を確認できます。'
+  );
+}
+
 // 画像・スタンプ等（テキスト以外）を受信したときの通知文面（2026-09-30追加）
 function buildNonTextNotifyText(userName, msgType) {
   return (
@@ -1988,13 +2009,13 @@ function buildNotifyTestReplyMessage(result) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.15.0',
+    version: '2.16.0',
     updated: '2026-10-04',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
     owner_notify: !!process.env.OWNER_USER_ID,
-    friend_list: friendList.getStatus(), // 件数と永続化の有無のみ（個人情報は出さない）
+    friend_list: friendList.getHealth(), // 永続化の有無と理由のみ（人数も出さない。人数はトークン付きの名簿ページだけ）
   });
 });
 
@@ -2010,7 +2031,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.15.0',
+    version: '2.16.0',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -2119,7 +2140,7 @@ app.get('/debug/step/run', (req, res) => {
 const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`LINE Bot v2.15.0 起動中: http://localhost:${PORT}`);
+    console.log(`LINE Bot v2.16.0 起動中: http://localhost:${PORT}`);
     console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
     // ステップ配信の初期化（既定では配信フラグがオフなので、何も送らない）
     stepDelivery.init({ client, pushLog });
