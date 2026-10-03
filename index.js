@@ -9,6 +9,7 @@ const path = require('path');
 const line = require('@line/bot-sdk');
 const stepDelivery = require('./stepDelivery');
 const zumenSession = require('./zumenSession');
+const friendList = require('./friendList');
 
 const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET,
@@ -145,12 +146,15 @@ async function handleEvent(event) {
     // ステップ配信のために登録日時を記録する（送信はしない）。
     // ⚠️ reply のあとに呼ぶ。記録の失敗が歓迎メッセージを絶対に巻き込まないこと。
     stepDelivery.recordFollow(event.source && event.source.userId);
+    // 友だち名簿（2026-10-04）。reply のあとに実行。例外は内部で握りつぶす。
+    await recordFriendFollow(event.source && event.source.userId);
     return;
   }
 
   // ブロック・友だち削除 → ステップ配信の対象から外す
   if (event.type === 'unfollow') {
     stepDelivery.recordUnfollow(event.source && event.source.userId);
+    friendList.recordUnfollow(event.source && event.source.userId); // 友だち名簿（例外は内部で握りつぶす）
     pushLog({ kind: 'unfollow' });
     return;
   }
@@ -185,9 +189,10 @@ async function handleEvent(event) {
 
     // ユーザー名は best-effort（失敗してもデフォルト）
     let userName = 'あなた';
+    let fetchedName = null; // 友だち名簿用（取得できたときだけ）
     try {
       const profile = await client.getProfile(event.source.userId);
-      if (profile && profile.displayName) userName = profile.displayName;
+      if (profile && profile.displayName) userName = fetchedName = profile.displayName;
     } catch (e) {
       // 取得失敗は無視
     }
@@ -202,6 +207,8 @@ async function handleEvent(event) {
     // getReply は単一メッセージ（オブジェクト）または複数メッセージ（配列）を返す
     const messages = Array.isArray(reply) ? reply : [reply];
     await safeReply(event.replyToken, messages, 'message');
+    // 友だち名簿（2026-10-04）：返信の後に記録。例外は friendList 内で握りつぶす。
+    friendList.recordMessage(userId, { displayName: fetchedName, text });
 
     // ── オーナーへの通知（返信の後に実行。通知の成否は相談者への返信結果に一切影響させない）──
     // オーナー自身が送ったメッセージには通知しない（無意味・pushMessage無料枠の浪費を避けるため）
@@ -279,9 +286,10 @@ async function handleEvent(event) {
     pushLog({ kind: 'non_text_message', msgType });
 
     let userName = 'あなた';
+    let fetchedName = null; // 友だち名簿用（取得できたときだけ）
     try {
       const profile = await client.getProfile(event.source.userId);
-      if (profile && profile.displayName) userName = profile.displayName;
+      if (profile && profile.displayName) userName = fetchedName = profile.displayName;
     } catch (e) {
       // 取得失敗は無視
     }
@@ -292,6 +300,7 @@ async function handleEvent(event) {
         : '画像を受け取りました。内容はカツヤスが拝見します。\n\nカツヤス';
 
     await safeReply(event.replyToken, [{ type: 'text', text: ackText }], `message_${msgType}`);
+    friendList.recordMessage(userId, { displayName: fetchedName }); // 友だち名簿（画像・ファイルは合言葉判定なし）
 
     if (userId && userId !== process.env.OWNER_USER_ID) {
       await notifyOwner(buildNonTextNotifyText(userName, msgType));
@@ -301,6 +310,34 @@ async function handleEvent(event) {
 
   // 上記以外のイベント（スタンプ・位置情報・unfollow等）は何もしない
   pushLog({ kind: 'event_ignored', type: event.type });
+}
+
+// ── 友だち名簿：follow の記録とオーナー通知（2026-10-04）────────
+// 🔴 reply の後に呼ぶ。表示名の取得（getProfile）で返信を遅らせない。
+// 🔴 通知は「新しい友だち（初回follow・再follow）」のときだけ1通。入口の合言葉は follow 時点では
+//    分からず、合言葉が届くたびに通知するとpush無料枠（月200通）を食うため、通知はfollow時の1通のみ。
+//    オーナー本人のfollowは通知しない。通知や名簿の失敗は握りつぶす（利用者への返信は送信済み）。
+async function recordFriendFollow(userId) {
+  try {
+    if (!userId) return;
+    const result = friendList.recordFollow(userId);
+    if (!result) return;
+    let displayName = null;
+    try {
+      const profile = await client.getProfile(userId);
+      if (profile && profile.displayName) {
+        displayName = profile.displayName;
+        friendList.setDisplayName(userId, displayName);
+      }
+    } catch (e) {
+      // 表示名の取得失敗は無視（名簿には「取得できていません」と出る。次のメッセージで補われる）
+    }
+    if (userId !== process.env.OWNER_USER_ID) {
+      await notifyOwner(buildNewFriendNotifyText(displayName, result));
+    }
+  } catch (e) {
+    console.error('[FRIENDS] follow処理の失敗:', e && e.message);
+  }
 }
 
 // reply送信のラッパー。エラー（401/400など）をログに残す
@@ -1757,6 +1794,19 @@ function truncateBody(text) {
   return text.length > 60 ? `${text.slice(0, 60)}…` : text;
 }
 
+// 新しい友だちが来たときの通知文面（2026-10-04追加）。入口の合言葉は名簿ページで確認する。
+function buildNewFriendNotifyText(displayName, result) {
+  const kind = result.isRefollow ? `再追加（${result.refollowCount}回目）` : '初めての追加';
+  return (
+    '👤 新しい友だちが追加されました\n\n' +
+    `お名前：${displayName || '（取得できませんでした）'}\n` +
+    `日時：${nowJSTDisplay()}\n` +
+    `種類：${kind}\n\n` +
+    '入口の合言葉は、最初のメッセージが届いた時点で名簿に記録されます。\n' +
+    '名簿ページで確認できます。'
+  );
+}
+
 // 画像・スタンプ等（テキスト以外）を受信したときの通知文面（2026-09-30追加）
 function buildNonTextNotifyText(userName, msgType) {
   return (
@@ -1939,11 +1989,12 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     version: '2.15.0',
-    updated: '2026-09-30',
+    updated: '2026-10-04',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
     owner_notify: !!process.env.OWNER_USER_ID,
+    friend_list: friendList.getStatus(), // 件数と永続化の有無のみ（個人情報は出さない）
   });
 });
 
@@ -1995,6 +2046,45 @@ app.get('/debug/zumen', (req, res) => {
   res.json(zumenSession.getStatus());
 });
 
+// ── 友だち名簿ページ（2026-10-04追加）──────────────────────
+// 🔴 DEBUG_TOKEN とは別の FRIEND_LIST_TOKEN で保護する。理由：DEBUG_TOKEN は動作確認のため
+//    URLに載せて使う機会が多く、持ち出し先が広い。名簿は表示名を含む個人情報なので、鍵を分けて
+//    「デバッグ鍵が漏れても名簿は開かない」ようにした。作法（未設定＝404で存在を隠す／違う＝401）は
+//    既存の requireDebugToken と同じ。トークンはクエリ ?token= のほか、ヘッダ x-list-token でも渡せる
+//    （PC側スクリプトはヘッダを使い、URLにトークンを残さない）。比較は定数時間。
+function requireListToken(req, res) {
+  const required = process.env.FRIEND_LIST_TOKEN;
+  if (!required) {
+    res.status(404).json({ error: 'not found' });
+    return false;
+  }
+  const given = String(req.get('x-list-token') || req.query.token || '');
+  const a = crypto.createHash('sha256').update(given).digest();
+  const b = crypto.createHash('sha256').update(required).digest();
+  if (!crypto.timingSafeEqual(a, b)) {
+    res.status(401).json({ error: 'unauthorized' });
+    return false;
+  }
+  res.set('Cache-Control', 'no-store');
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  return true;
+}
+
+// 一覧（HTML）: /admin/friends?token=<FRIEND_LIST_TOKEN>
+app.get('/admin/friends', (req, res) => {
+  if (!requireListToken(req, res)) return;
+  const q = req.query.token ? `?token=${encodeURIComponent(String(req.query.token))}` : '';
+  res.type('html').send(friendList.toHtml(process.env.OWNER_USER_ID, `/admin/friends.csv${q}`));
+});
+
+// CSV（UTF-8 BOM付き）: /admin/friends.csv?token=<FRIEND_LIST_TOKEN>
+app.get('/admin/friends.csv', (req, res) => {
+  if (!requireListToken(req, res)) return;
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', 'attachment; filename="friends.csv"');
+  res.send(friendList.toCsv(process.env.OWNER_USER_ID));
+});
+
 // 文面の確認（送信しない）: /debug/step/preview?token=<DEBUG_TOKEN>
 app.get('/debug/step/preview', (req, res) => {
   if (!requireDebugToken(req, res)) return;
@@ -2035,10 +2125,12 @@ if (require.main === module) {
     stepDelivery.init({ client, pushLog });
     // 『図面の向こう側』無料相談セッションの永続化を初期化（2026-09-30追加）
     zumenSession.init();
+    // 友だち名簿の永続化を初期化（2026-10-04追加）
+    friendList.init();
   });
 }
 
 // ── テスト用エクスポート（2026-09-30追加）───────────────────
 // 本番の起動・Webhook処理には一切影響しない（追加のみ）。ローカル試験スクリプトが
 // 合言葉分岐（getReply）・通知判定（classify）を直接呼べるようにするためのもの。
-module.exports = { getReply, classify, defaultReplyText, handleEvent };
+module.exports = { getReply, classify, defaultReplyText, handleEvent, app };

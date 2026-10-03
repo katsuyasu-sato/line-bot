@@ -6,3 +6,8 @@ node_modules/
 public/chousa_irai_memo.pdf
 *.bak_*
 .claude/
+
+# 2026-10-04 追加：友だち名簿（個人情報）は絶対にコミットしない
+friends*.json
+friends*.csv
+*.tmp
