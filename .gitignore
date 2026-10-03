@@ -1,3 +1,8 @@
 node_modules/
 .env
 *.log
+
+# 2026-09-30 追加（CEO裁定E）：没になった本の特典・作業用の一時ファイルをコミットに含めない
+public/chousa_irai_memo.pdf
+*.bak_*
+.claude/

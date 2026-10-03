@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const path = require('path');
 const line = require('@line/bot-sdk');
 const stepDelivery = require('./stepDelivery');
+const zumenSession = require('./zumenSession');
 
 const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET,
@@ -38,6 +39,27 @@ const debugLog = [];
 function pushLog(entry) {
   debugLog.push({ ts: new Date().toISOString(), ...entry });
   if (debugLog.length > DEBUG_LOG_MAX) debugLog.shift();
+}
+
+// ── 画像セットの重複抑制（2026-09-30追加）──────────────────
+// LINEは複数枚まとめ送信された画像（アルバム送信）を、1枚ずつ別のwebhookイベントとして送る。
+// 各イベントの message.imageSet.id が同じなら同じ束。最初の1枚だけ処理し、残りは無視することで、
+// 束ごとに返信・通知を1回にまとめる（push無料枠＝月200通・ステップ配信と共有を守るため）。
+// 🔴 これは再起動をまたいで覚えておく必要のない短期キャッシュ（写真が送られてから数秒〜数十秒の
+// 　ズレを吸収するだけの用途）。zumenSession.js のような永続化は不要と判断した。
+const handledImageSets = new Map(); // imageSet.id -> 期限(ms)
+const IMAGE_SET_TTL_MS = 5 * 60 * 1000;
+function isImageSetHandled(imageSet) {
+  if (!imageSet || !imageSet.id) return false;
+  const now = Date.now();
+  for (const [id, exp] of handledImageSets) {
+    if (exp < now) handledImageSets.delete(id);
+  }
+  return handledImageSets.has(imageSet.id);
+}
+function markImageSetHandled(imageSet) {
+  if (!imageSet || !imageSet.id) return;
+  handledImageSets.set(imageSet.id, Date.now() + IMAGE_SET_TTL_MS);
 }
 
 // ── Webhook エンドポイント ──────────────────────────────
@@ -169,6 +191,13 @@ async function handleEvent(event) {
     } catch (e) {
       // 取得失敗は無視
     }
+    // 🔴 2026-09-30 変更：classify() は getReply() より先に呼ぶ。getReply() は 'keyword'/'exit'
+    //    判定の結果に応じて zumenSession.start()/end() を呼び、セッション状態を変更する
+    //    （副作用を持つのは getReply() 呼び出し時だけ）。classify() の resolveZumenState() は
+    //    「今の」セッション状態を読むため、getReply() が先に session.end() してしまうと
+    //    'exit' を検出できなくなる。順序を入れ替えることで、常に「メッセージ受信時点」の
+    //    セッション状態で通知種別を判定できるようにしている。
+    const kind = classify(text, userId);
     const reply = getReply(text, userName, userId);
     // getReply は単一メッセージ（オブジェクト）または複数メッセージ（配列）を返す
     const messages = Array.isArray(reply) ? reply : [reply];
@@ -177,9 +206,19 @@ async function handleEvent(event) {
     // ── オーナーへの通知（返信の後に実行。通知の成否は相談者への返信結果に一切影響させない）──
     // オーナー自身が送ったメッセージには通知しない（無意味・pushMessage無料枠の浪費を避けるため）
     if (userId && userId !== process.env.OWNER_USER_ID) {
-      const kind = classify(text);
-      if (kind === 'soudan_apply') {
-        await notifyOwner(buildSoudanApplyNotifyText(userName));
+      if (kind === 'zumen_soudan') {
+        await notifyOwner(buildZumenNotifyText(userName), { priority: 'high' });
+      } else if (kind === 'zumen_continue') {
+        // 【CEO裁定D-1】1人につき前の通知から1時間以内なら実際には送らず、
+        // 次回の通知に「この間にN件」として載せる（通知の内容自体は毎回作るが、pushは間引く）。
+        const throttle = noteZumenContinue(userId);
+        if (throttle.send) {
+          await notifyOwner(buildZumenContinueNotifyText(userName, text, throttle.suppressedSinceLast));
+        }
+      } else if (kind === 'zumen_exit') {
+        await notifyOwner(buildZumenExitNotifyText(userName, text));
+      } else if (kind === 'soudan_apply') {
+        await notifyOwner(buildSoudanApplyNotifyText(userName), { priority: 'high' });
       } else if (kind === 'doterra_interest') {
         await notifyOwner(buildDoterraInterestNotifyText(userName, text));
       } else if (kind === 'step_reply') {
@@ -187,11 +226,80 @@ async function handleEvent(event) {
       } else if (kind === 'fallback') {
         await notifyOwner(buildFallbackNotifyText(userName, text));
       }
+
+      // 【CEO裁定C】保存先ボリュームが無い（セッションが永続化されていない）場合の安全網。
+      // 無料相談セッション中かどうかに関係なく、住まいの言葉を含むメッセージは必ず通知する。
+      // セッションが再起動で失われても、この通知だけは常に届く（詳細はコメント参照）。
+      // 🔴 2026-09-30 監査再指摘（3回目）：
+      //   ・'zumen_soudan' と 'zumen_continue' は、上の分岐で既に通知済み（または
+      //     'zumen_continue' の場合は1時間の間引きの判断が済んでいる）。この安全網が
+      //     無条件に発火すると、同じメッセージへの通知が二重になる、あるいは
+      //     間引き（noteZumenContinueのthrottle.send===false）を安全網が素通りさせてしまう。
+      //   ・そのため 'zumen_soudan'/'zumen_continue' のときは、この安全網を発火させない
+      //     （どちらも既に通知の要否判定が済んでいるため、二重チェックは不要）。
+      if (
+        kind !== 'zumen_soudan' &&
+        kind !== 'zumen_continue' &&
+        !zumenSession.getStatus().persistent &&
+        containsHousingWord(text)
+      ) {
+        await notifyOwner(buildNoVolumeHousingNotifyText(userName, text));
+      }
     }
     return;
   }
 
-  // 上記以外のイベント（unfollow等）は何もしない
+  // ── 画像・ファイル（テキスト以外のメッセージのうち対応するのは画像とファイルだけ）─────
+  // 🔴 2026-09-30 追加：『マンガ図面の向こう側』無料相談で「間取り図の写真を送ってください」と
+  //    案内しているため、画像メッセージが無反応・無通知のまま消える状態は放置できない。
+  //    従来はここに到達せず、下の pushLog({kind:'event_ignored'}) だけで終わっていた
+  //    （＝オーナーに一切届かない取りこぼしだった）。
+  // 🔴 2026-09-30 監査再指摘で対象を画像・ファイルだけに絞った。スタンプ・位置情報等は対象外
+  //    （返信も通知もしない。従来どおり無反応で、下の pushLog({kind:'event_ignored'}) になる）。
+  // 🔴 写真をまとめて送られた場合（LINEのアルバム送信＝message.imageSet）は、1枚ごとに別の
+  //    webhookイベントが届くが、返信・通知は束ごとに1回にまとめる（push無料枠を守るため。
+  //    判定は isImageSetHandled/markImageSetHandled、上部で定義）。
+  //    合言葉の判定はできない（画像・ファイルの内容は読めない）ため、常に一次受付の文言だけ返し、
+  //    連絡すると断定せず「カツヤスが拝見する」という事実だけを伝える。
+  if (
+    event.type === 'message' &&
+    event.message &&
+    (event.message.type === 'image' || event.message.type === 'file')
+  ) {
+    const userId = event.source && event.source.userId;
+    const msgType = event.message.type;
+    const imageSet = event.message.imageSet; // file には存在しない
+
+    if (isImageSetHandled(imageSet)) {
+      pushLog({ kind: 'image_set_suppressed', setId: imageSet && imageSet.id, index: imageSet && imageSet.index });
+      return;
+    }
+    if (imageSet) markImageSetHandled(imageSet);
+
+    pushLog({ kind: 'non_text_message', msgType });
+
+    let userName = 'あなた';
+    try {
+      const profile = await client.getProfile(event.source.userId);
+      if (profile && profile.displayName) userName = profile.displayName;
+    } catch (e) {
+      // 取得失敗は無視
+    }
+
+    const ackText =
+      msgType === 'file'
+        ? 'ファイルを受け取りました。内容はカツヤスが拝見します。\n\nカツヤス'
+        : '画像を受け取りました。内容はカツヤスが拝見します。\n\nカツヤス';
+
+    await safeReply(event.replyToken, [{ type: 'text', text: ackText }], `message_${msgType}`);
+
+    if (userId && userId !== process.env.OWNER_USER_ID) {
+      await notifyOwner(buildNonTextNotifyText(userName, msgType));
+    }
+    return;
+  }
+
+  // 上記以外のイベント（スタンプ・位置情報・unfollow等）は何もしない
   pushLog({ kind: 'event_ignored', type: event.type });
 }
 
@@ -340,10 +448,172 @@ function giftMessage(userName) {
 }
 
 
+// ── 『マンガ図面の向こう側』無料相談セッション（2026-09-30 新設）──────
+// 🔴 監査室指摘（2026-09-30）：合言葉「図面」を送った読者が続けて別の文章
+//    （例：「築40年で屋根と外壁が心配です」「リフォーム相談」「相談したいです」）を送ると、
+//    その文章に含まれる単語に別の合言葉分岐が反応してしまい、①別の案内（外壁修繕アプリ・
+//    ¥20,000のリフォーム個別相談・doTERRAを含む相談メニュー等）が返る ②いずれもオーナーに
+//    通知が飛ばない、という2つの不具合があった。
+//    さらに「設計図面」「屋根の図面」「100万円の見積もりの図面」「ノートに書いた図面」のように
+//    "図面"という文字列が、既存の別の合言葉（設計図・外壁修繕・リフォーム本・note流入元）の
+//    キーワードと**同じ文中に同時に含まれる**ケースがあり、判定順序次第で
+//    getReply()の返信とclassify()の通知判定が食い違っていた
+//    （旧実装は「図面」チェックがリフォーム本等より後ろにあったため、返信は別の案内が勝ち、
+//    classify()は独立に「図面」の有無だけを見ていたため通知だけ zumen_soudan になっていた）。
+//
+// 【修正方針】
+//   1. 「図面」判定を、他のどの合言葉判定よりも先頭（マイIDの直後）に固定する。
+//      これにより「設計図面」等の文字列重複があっても必ず図面が勝つ＝返信と通知が食い違わない。
+//   2. 読者が合言葉「図面」を送ったら、ユーザーごとに「無料相談セッション」を開始し
+//      （永続化はzumenSession.js。stepDelivery.jsと同じ方式）、セッション中は
+//      「図面」を含まない後続メッセージも、他の合言葉分岐に渡さず中立文で受け止め、
+//      必ずオーナーに通知する。
+//   3. 抜け出し方：後続メッセージが**他の合言葉と完全一致**した場合だけセッションを終了し、
+//      通常の分岐に進む（CEO裁定の案どおり）。
+//      🔴 ただし「相談」「コンサル」「個別」「相談希望」「そうだん希望」「個別相談希望」
+//         「リフォーム相談」「doTERRA」「ドテラ」「どてら」は許可リストに**含めない**。
+//         無料相談（登録勧誘目的ではない）の途中で¥20,000の有料相談やdoTERRAに
+//         話をつなげないため（CEO裁定・rules/compliance.md §7-5）。
+// ──────────────────────────────────────────────────────
+function zumenKeywordHit(text) {
+  return text.includes('図面') || text.includes('ずめん') || text.includes('ズメン');
+}
+
+// 完全一致でのみ「無料相談セッションから抜け出せる」合言葉。
+// 🔴 2026-09-30 再監査（2回目）でCEOが許可リストを絞り直した。
+//    監査室の実測＝「図面」→「屋根」の1語だけで無料相談から抜け、外壁アプリの案内が返り、
+//    通知も届かなかった。「屋根」「外壁」「修繕」「外壁修繕」「設計図」「100万円」
+//    「チェックリスト」「テンプレート」「空き家」「あきや」「空家」「ノート」「副業」は、
+//    住まい・相談の中身と取り違えやすいため**除外**した。
+//    残してよいのは、本の合言葉として相談の中身と取り違えない言葉だけ（CEO裁定）：
+//    香り・快眠・アロマ本・貧乏脳・金持ち脳・口癖カード・リフォーム本・副業本・AI社長・
+//    体の点検・箱舟・名刺・マイID（表記の揺れは rules/keywords_master.md に合わせた）。
+// 🔴 相談系（相談・コンサル・個別・相談希望・そうだん希望・個別相談希望・リフォーム相談）と
+//    doTERRA系（doTERRA・ドテラ・どてら）は元から意図して含めていない（無料相談から
+//    有料相談・doTERRAへ接続しないため。CEO裁定・rules/compliance.md §7-5）。
+const ZUMEN_EXIT_ALLOWLIST = new Set([
+  '香り',
+  '快眠', 'アロマ本',
+  '貧乏脳', '金持ち脳', '口癖カード',
+  'リフォーム本',
+  '副業本',
+  'AI社長', 'ＡＩ社長', 'AIシャチョウ', 'ＡＩシャチョウ', 'エーアイ社長',
+  '体の点検', 'からだの点検', 'カラダの点検', '体のてんけん',
+  '箱舟', 'はこぶね', 'ハコブネ', '方舟',
+  '名刺', '舞台裏', '本づくり', '本作り',
+  'マイID', 'マイid', 'マイＩＤ', 'マイＩｄ',
+]);
+
+// 戻り値: 'keyword'（合言葉「図面」等を含む）／'step_priority'（セッション中でも
+//        ステップ配信の返信キーワードを優先させる。CEO裁定B-2）／
+//        'intercept'（セッション中・抜け出し不可の継続メッセージ）／
+//        'exit'（セッション中・完全一致で他の合言葉へ抜け出す）／'none'（対象外）
+// 🔴 副作用（session.start/end）は持たない読み取り専用の判定関数にする。
+//    getReply()とclassify()の両方から同じ入力で呼べば必ず同じ結果になることを保証するため。
+function resolveZumenState(text, userId) {
+  if (zumenKeywordHit(text)) return 'keyword';
+  if (userId && zumenSession.isActive(userId)) {
+    // 【CEO裁定B-2】ステップ配信の返信キーワード（実家の話／本の話／出版の話）は、
+    // 無料相談セッション中でも、ステップ配信側の返信を優先する。通知はこれまでどおり
+    // classify() 側の既存ロジック（stepDelivery.isStepKeyword）で 'step_reply' として出す。
+    if (stepDelivery.isStepKeyword(text)) return 'step_priority';
+    if (ZUMEN_EXIT_ALLOWLIST.has(text.trim())) return 'exit';
+    return 'intercept';
+  }
+  return 'none';
+}
+
+// セッション継続中の中立な受付文言（他の分岐の内容には一切触れない）
+function zumenInterceptReplyText() {
+  return (
+    'ありがとうございます。\n' +
+    '\n' +
+    'こちらも無料相談の続きとして確認します。\n' +
+    '\n' +
+    '他に伝えておきたいことがあれば、そのまま続けて送ってください。\n' +
+    '\n' +
+    'カツヤス'
+  );
+}
+
 // ── キーワード別返信 ────────────────────────────────────
 function getReply(text, userName, userId) {
 
-  // 【最優先】オーナー自身のLINEユーザーID確認用（他のどの合言葉判定よりも先に判定する）
+  // 【合言葉】『マンガ図面の向こう側』（ASIN B0GGBV5D59）読者の無料相談受付・無料相談セッション
+  // 合言葉: 「図面」「ずめん」「ズメン」
+  // 🔴 2026-09-30 オーナー裁定：この本の巻末は「期間限定」と書いていたが期限は無く、
+  //    Botの住宅相談案内は¥20,000の有料になっていて本の記載と食い違っていた（監査指摘）。
+  //    この本の読者の相談は無料で受け、わが社のLINE Botに誘導する、と決定。
+  // 🔴 2026-09-30 監査再指摘（1回目）：この判定は**他のどの合言葉判定よりも先**に固定する。
+  //    「設計図面」「屋根の図面」「100万円の見積もりの図面」「ノートに書いた図面」等、
+  //    "図面"の文字列が他の合言葉（設計図／外壁修繕／リフォーム本／note流入元）と
+  //    同じ文中に同時に出現するケースがあるため、判定順序を後ろにすると
+  //    返信（getReply）と通知（classify）が食い違う。
+  // 🔴 2026-09-30 監査再指摘（2回目）：マイID（オーナー用の自己診断）より**さらに先**に
+  //    移動した。マイIDが先だと、セッション中に「マイID」（許可された抜け出し語）を送っても
+  //    マイID分岐が先にreturnしてしまい、zumenSession.end()が呼ばれず、classify()が
+  //    'zumen_exit'を返すのに実際にはセッションが終わっていない、という食い違いが起きるため。
+  //    詳細は下の resolveZumenState 定義部のコメントを参照。参照：rules/keywords_master.md
+  {
+    const zumenState = resolveZumenState(text, userId);
+    if (zumenState === 'keyword') {
+      zumenSession.start(userId);
+      return {
+        type: 'text',
+        text:
+          '合言葉、ありがとうございます。\n' +
+          '『マンガ図面の向こう側』を読んでいただき、ありがとうございます。\n' +
+          '\n' +
+          'こちらは、この本の読者の方への無料相談の受付です。\n' +
+          '\n' +
+          '間取り図の写真や、気になっていることを、そのままこのトークに送ってください。図面にお名前やご住所が入っている場合は、その部分を隠してお送りください。\n' +
+          '\n' +
+          '佐藤勝保（カツヤス）が、文字でお返事します。お返事まで数日いただくことがあります。\n' +
+          '\n' +
+          'この無料相談は、このトークでの文字のやりとりです。現地の調査や、建物の状態の判定（鑑定）は行いません。設計・工事監理（建築士法上の業務）も含まれません。特定の業者の評価・推奨も行いません。\n' +
+          '\n' +
+          'カツヤス',
+      };
+    }
+    if (zumenState === 'step_priority') {
+      // 【ステップ優先】セッション中でもステップ配信の返信キーワードはそちらを優先する
+      // （CEO裁定B-2）。
+      // 🔴 2026-09-30 監査再指摘（3回目）：ここで return せずに下へ進めると、
+      // 「実家の話を相談したい」「出版の話 相談希望」「実家の話で屋根が心配」のように、
+      // テキストに他の合言葉の文字列（相談・相談希望・屋根等）が同時に含まれる場合、
+      // この下にある既存カスケード（相談メニュー・リフォーム相談・外壁修繕等）に先に
+      // 引っかかってしまい、末尾の stepDelivery.stepKeywordReply(text) まで到達しない
+      // （＝返信がステップ配信ではなく他の案内になり、通知もそちらの種別になってしまう）。
+      // ここで直接 stepKeywordReply を呼んで即 return することで、返信と通知（step_reply）を
+      // 必ずそろえる。resolveZumenState が 'step_priority' を返す条件は
+      // stepDelivery.isStepKeyword(text) が true のときだけなので、ここでは必ず非nullが返る。
+      // セッションは終了しない（このメッセージだけステップ配信を優先し、次のメッセージから
+      // また無料相談として扱う）。14日タイマーは更新する（会話が続いている扱いにする）。
+      zumenSession.touch(userId);
+      const stepReply = stepDelivery.stepKeywordReply(text);
+      if (stepReply) return stepReply;
+      // 理論上ここには来ない（resolveZumenStateとisStepKeywordの判定条件が同一のため）。
+      // 来た場合でもクラッシュさせず、下の既存カスケードにフォールバックする。
+    } else if (zumenState === 'intercept') {
+      // 【継続】『マンガ図面の向こう側』無料相談セッション中の後続メッセージ
+      // 「図面」を含まない後続メッセージが、他の合言葉分岐（外壁修繕・リフォーム相談・相談等）に
+      // 取られないよう、ここで中立文で受け止める。完全一致の抜け出し（ZUMEN_EXIT_ALLOWLIST）は
+      // ここより後ろの通常の合言葉判定に進ませるため、'intercept' のときだけここで止める。
+      // 【CEO裁定B-1】最後のメッセージから14日で自動終了するタイマーを、ここで更新する。
+      zumenSession.touch(userId);
+      return {
+        type: 'text',
+        text: zumenInterceptReplyText(),
+      };
+    } else if (zumenState === 'exit') {
+      // 【抜け出し】完全一致で他の合言葉に切り替わった場合はセッションを終了し、
+      // 通常の分岐（このあとの既存コード。マイID含む）に進む。
+      zumenSession.end(userId);
+      // return しない。この下の既存の合言葉カスケードにそのまま進む。
+    }
+  }
+
+  // 【最優先】オーナー自身のLINEユーザーID確認用（無料相談まわり以外のどの合言葉判定よりも先に判定する）
   // 合言葉: 「マイID」（表記ゆれ4種対応: マイID／マイid／マイＩＤ／マイＩｄ）
   if (
     text.includes('マイID') ||
@@ -1147,6 +1417,86 @@ function getReply(text, userName, userId) {
     ];
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🔴【一時無効化 2026-09-30】合言葉「空き家」「あきや」「空家」の分岐
+  //
+  // 無効化の理由：
+  //   Kindle新刊『空き家を、買う前に建築士の目で見る』（仮題）は 2026-09-20 の
+  //   オーナー裁定で没になった（rules/keywords_master.md の該当行を参照）。
+  //   本が出版されない以上、この合言葉を送っても存在しない本の特典（調査依頼メモPDF）が
+  //   届くことになり、実害はないが読者に嘘をつく形になるため、コードを削除せずコメントアウトで
+  //   無効化した（「ミネラル」休眠と同じ方式）。
+  //
+  // 復活の条件：
+  //   この本の企画が復活し、実際に出版されるとき（オーナー/CEO判断）。
+  //
+  // 無効化中の振る舞い：
+  //   「空き家」等が送られてもこの分岐は発火せず、以降の分岐にも当たらないため
+  //   デフォルト返信（defaultReplyText）が返る。classify() は 'fallback' を返すので
+  //   オーナーに「🔕 取りこぼし」通知が飛ぶ＝人が拾える。エラーにも無反応にもならない。
+  // ═══════════════════════════════════════════════════════════════
+  // // 【合言葉】『空き家を、買う前に建築士の目で見る』（仮題）読者特典・調査依頼メモPDF
+  // // 合言葉: 「空き家」「あきや」「空家」
+  // // テキスト本文（あいさつ＋メモのご案内）＋ PDFダウンロードボタン（Flex）の2通で返す
+  // // （「体の点検」「箱舟」と同構造。既存9系統の判定の後ろ・名刺の受け皿より前に置き、
+  // //   判定の取り合いを起こさない。「相談」より判定が後ろにあるのは他の本の合言葉と同じ扱い＝
+  // //   rules/keywords_master.md「合言葉『相談』だけは性質が違う」参照）
+  // if (
+  //   text.includes('空き家') ||
+  //   text.includes('あきや') ||
+  //   text.includes('空家')
+  // ) {
+  //   return [
+  //     {
+  //       type: 'text',
+  //       text:
+  //         '合言葉、ありがとうございます。\n' +
+  //         '『空き家を、買う前に建築士の目で見る』を読んでくださって、ありがとうございます。\n' +
+  //         '\n' +
+  //         'お約束の読者特典「専門家に渡す 調査依頼メモ」をお届けします。本書の記入シートで気になる箇所が見つかったら、次は専門家に見てもらう番です。このメモは、そのときに何を伝え、何を聞けばよいかを、会う前に整理しておくための書面です。\n' +
+  //         '\n' +
+  //         '下のボタンからPDFを開けます。印刷して、専門家に会うときに持って行ってください。\n' +
+  //         '\n' +
+  //         'カツヤス',
+  //     },
+  //     {
+  //       type: 'flex',
+  //       altText: '読者特典「専門家に渡す 調査依頼メモ」（PDF）をお届けします',
+  //       contents: {
+  //         type: 'bubble',
+  //         body: {
+  //           type: 'box',
+  //           layout: 'vertical',
+  //           contents: [
+  //             { type: 'text', text: '📋 専門家に渡す 調査依頼メモ', weight: 'bold', size: 'md', color: '#0C2448', wrap: true },
+  //             { type: 'separator', margin: 'md' },
+  //             {
+  //               type: 'text',
+  //               text: '本書の記入シートで気になった箇所を、専門家に会うときに使う書面です。印刷してお使いください。',
+  //               wrap: true,
+  //               margin: 'md',
+  //               size: 'sm',
+  //             },
+  //           ],
+  //           paddingAll: '20px',
+  //         },
+  //         footer: {
+  //           type: 'box',
+  //           layout: 'vertical',
+  //           contents: [
+  //             {
+  //               type: 'button',
+  //               action: { type: 'uri', label: '📋 調査依頼メモ（PDF）を開く', uri: 'https://kind-cooperation-production.up.railway.app/present/chousa_irai_memo.pdf' },
+  //               style: 'primary',
+  //               color: '#0C2448',
+  //             },
+  //           ],
+  //         },
+  //       },
+  //     },
+  //   ];
+  // }
+
   // 【名刺】名刺から来た方が、あとからもう一度PDFを開きたくなったときの受け皿。
   // 🔴 名刺には合言葉を印刷していないため、これは「合言葉」ではない。友だち追加時のあいさつで
   //    既にPDFは渡してある（welcomeMessages）。ここはあくまで再取得用の保険である。
@@ -1221,6 +1571,9 @@ function defaultReplyText(userName) {
 }
 
 // ── メッセージの分類（オーナー通知の要否判定専用。getReply()の戻り値の形は変えない）──
+// ・'zumen_soudan'　　　：『マンガ図面の向こう側』読者の無料相談合言葉（2026-09-30追加。
+// 　　　　　　　　　　　　合言葉を受けた時点で必ずオーナーに通知する）
+// ・'zumen_continue'　　：同セッション中の後続メッセージ（2026-09-30追加。毎回必ず通知する）
 // ・'soudan_apply'　　　：相談の申込みが完了した（＝申込通知の対象。リフォーム個別相談の
 // 　　　　　　　　　　　　「個別相談希望」もここに含む。"個別相談希望".includes('相談希望') が
 // 　　　　　　　　　　　　真になるため、意図してこの判定に含めている）
@@ -1230,12 +1583,41 @@ function defaultReplyText(userName) {
 // ・'fallback'　　　　　：どの合言葉にも当たらず、デフォルトの定型文が返された（＝取りこぼし通知の対象）
 // ・null　　　　　　　　：それ以外（通知しない）
 //
-// 判定優先順位（上が強い）：soudan_apply → doterra_interest → fallback → null
+// ・'zumen_exit'　　　　：無料相談セッション中に、完全一致の別合言葉で抜けた（2026-09-30追加。
+// 　　　　　　　　　　　　「無料相談中の人が別の合言葉で抜けた」ことが分かるよう必ず通知する。
+// 　　　　　　　　　　　　抜け出し先の分岐自体の通知有無とは無関係に、この通知を優先する）
+//
+// 判定優先順位（上が強い）：zumen_soudan → zumen_continue → zumen_exit → soudan_apply → doterra_interest → fallback → null
+//
+// 🔴 2026-09-30 変更：classify() は userId を受け取るようになった（zumen_soudan/zumen_continue/
+//    zumen_exit の判定に resolveZumenState(text, userId) を使うため。getReply() 内の同判定と
+//    完全に同じ関数を呼ぶことで、返信と通知が食い違わないことを保証する＝監査室指摘への対応）。
+//    'step_priority'（セッション中でもステップ配信の返信を優先）も、soudan_apply等より
+//    先に'step_reply'として即返す（下のstepDelivery.isStepKeyword(text)チェックに委ねると
+//    「出版の話 相談希望」等で先にsoudan_applyに取られてしまうため。監査再指摘3回目）。
 //
 // 「相談希望」分岐の条件式は、getReply() 内の同分岐と完全に同じものにする。
 // 「どの分岐にも当たらない」の判定は、全分岐の条件を並べて否定する二重管理を避けるため、
 // getReply() を実際に呼び出し、その結果がデフォルト文面（defaultReplyText）と一致するかで判定する。
-function classify(text) {
+function classify(text, userId) {
+  const zumenState = resolveZumenState(text, userId);
+  if (zumenState === 'keyword') {
+    return 'zumen_soudan';
+  }
+  if (zumenState === 'intercept') {
+    return 'zumen_continue';
+  }
+  if (zumenState === 'exit') {
+    return 'zumen_exit';
+  }
+  // 🔴 2026-09-30 監査再指摘（3回目）：'step_priority' もここで即返す。
+  // 「出版の話 相談希望」のように、ステップ配信の言葉と「相談希望」等が同じ文中にあると、
+  // 下の soudan_apply/doterra_interest の判定に先に引っかかり、getReply() の実際の返信
+  // （ステップ配信の内容）と通知の種別が食い違ってしまうため。
+  if (zumenState === 'step_priority') {
+    return 'step_reply';
+  }
+
   if (text.includes('相談希望') || text.includes('そうだん希望')) {
     return 'soudan_apply';
   }
@@ -1250,6 +1632,10 @@ function classify(text) {
     return 'step_reply';
   }
 
+  // 🔴 probe は userId を渡さない（null）。これにより resolveZumenState は必ず 'none' になり、
+  //    セッション状態に依存しない「素の」判定結果でdefaultReplyTextとの一致を確認できる。
+  //    'exit' 直後（実際の呼び出しでは既にセッションが終了済み）でも、probe側はもともと
+  //    userId=null なので判定は変わらず、実際にgetReply()が返した分岐と一致する。
   const probeName = '__classify_probe__';
   const probeReply = getReply(text, probeName, null);
   if (
@@ -1270,6 +1656,36 @@ function classify(text) {
 //   → 呼び出し元では必ず safeReply() の後に呼ぶ。ここでは必ず try/catch し、例外を外に投げない。
 const notifyCounter = { date: '', count: 0 };
 const NOTIFY_DAILY_LIMIT = 30;
+// 【CEO裁定D-2】1日30通の上限に近づいたら、「図面」の最初の受付（zumen_soudan）と
+// 相談の申込み（soudan_apply）を優先して残す。残り枠がこの数以下になったら、
+// priority:'high' 以外の通知は送らない（＝この枠数を高優先度専用に確保する）。
+const NOTIFY_PRIORITY_RESERVE = 5;
+
+// 『マンガ図面の向こう側』無料相談セッション中の後続メッセージ通知の間引き（2026-09-30追加）
+// 【CEO裁定D-1】1人につき前の通知から1時間以内なら実際のpushは送らず、次の通知に
+// 「この間にN件」として件数を載せる。セッションと違い再起動をまたいで覚えておく必要はない
+// （間引きの目的は無料枠の節約であり、失われても実害は「間引かれず少し多く通知される」だけ）。
+const zumenContinueThrottle = new Map(); // userId -> { lastNotifiedAt: ms, suppressedCount: number }
+const ZUMEN_CONTINUE_THROTTLE_MS = 60 * 60 * 1000; // 1時間
+function noteZumenContinue(userId) {
+  const now = Date.now();
+  const rec = zumenContinueThrottle.get(userId);
+  if (!rec || now - rec.lastNotifiedAt >= ZUMEN_CONTINUE_THROTTLE_MS) {
+    const suppressedSinceLast = rec ? rec.suppressedCount : 0;
+    zumenContinueThrottle.set(userId, { lastNotifiedAt: now, suppressedCount: 0 });
+    return { send: true, suppressedSinceLast };
+  }
+  rec.suppressedCount += 1;
+  return { send: false, suppressedSinceLast: rec.suppressedCount };
+}
+
+// 【CEO裁定C】保存先ボリュームが無い（セッション永続化ができていない）場合の安全網。
+// 無料相談セッション中かどうかに関係なく、住まいの言葉を含むメッセージは必ず通知する
+// （セッションが再起動で失われても、この通知だけは常に届くようにする）。
+const HOUSING_WORDS = ['図面', '間取り', '屋根', '外壁', '修繕', 'リフォーム'];
+function containsHousingWord(text) {
+  return HOUSING_WORDS.some((w) => text.includes(w));
+}
 
 // 日本時間の「今日の日付」を日次上限リセット判定用に返す（Railwayのサーバー時刻はUTCのため明示指定）
 function todayJST() {
@@ -1301,8 +1717,9 @@ function nowJSTDisplay() {
 //   送信失敗          : { ok: false, reason: 'send_failed', detail: <エラーメッセージ文字列> }
 //   日次上限に達している: { ok: false, reason: 'daily_limit' }
 //   OWNER_USER_ID 未設定: { ok: false, reason: 'not_configured' }
-async function notifyOwner(text) {
+async function notifyOwner(text, opts = {}) {
   if (!process.env.OWNER_USER_ID) return { ok: false, reason: 'not_configured' }; // 未設定なら通知は黙って無効（通常動作には影響しない）
+  const priority = opts.priority === 'high' ? 'high' : 'normal';
 
   try {
     const today = todayJST();
@@ -1313,6 +1730,13 @@ async function notifyOwner(text) {
     if (notifyCounter.count >= NOTIFY_DAILY_LIMIT) {
       pushLog({ kind: 'notify_skipped_limit', date: today, count: notifyCounter.count });
       return { ok: false, reason: 'daily_limit' };
+    }
+    // 【CEO裁定D-2】残り枠が予備枠以下になったら、高優先度（図面の最初の受付・相談の申込み）
+    // 以外は送らない。予備枠を使い切ってしまうと、本当に対応が必要な通知まで落ちてしまうため。
+    const remaining = NOTIFY_DAILY_LIMIT - notifyCounter.count;
+    if (priority !== 'high' && remaining <= NOTIFY_PRIORITY_RESERVE) {
+      pushLog({ kind: 'notify_skipped_reserve', date: today, count: notifyCounter.count, remaining });
+      return { ok: false, reason: 'reserved_for_priority' };
     }
     notifyCounter.count += 1;
 
@@ -1331,6 +1755,75 @@ async function notifyOwner(text) {
 // 本文の先頭60字に切り詰める（60字を超えたら末尾に …）。取りこぼし通知・ドテラ関心通知で共用。
 function truncateBody(text) {
   return text.length > 60 ? `${text.slice(0, 60)}…` : text;
+}
+
+// 画像・スタンプ等（テキスト以外）を受信したときの通知文面（2026-09-30追加）
+function buildNonTextNotifyText(userName, msgType) {
+  return (
+    '📷 画像などが届きました\n\n' +
+    `お名前：${userName}\n` +
+    `種類：${msgType}\n` +
+    `受信：${nowJSTDisplay()}\n\n` +
+    'Botは「受け取りました」の一次受付だけ返しています。\n' +
+    'LINEの公式アカウントのトークを開いてご確認ください。'
+  );
+}
+
+// 『マンガ図面の向こう側』読者の無料相談通知の文面（2026-09-30追加）
+function buildZumenNotifyText(userName) {
+  return (
+    '📐 図面の向こう側の読者から無料相談\n\n' +
+    `お名前：${userName}\n` +
+    `受信：${nowJSTDisplay()}\n\n` +
+    'LINEの公式アカウントのトークを開いて\n' +
+    '内容をご確認ください。'
+  );
+}
+
+// 『マンガ図面の向こう側』無料相談セッション中の後続メッセージ通知（2026-09-30追加）
+// 🔴 このメッセージは他の合言葉分岐に渡さず中立文で受け止めているため、必ず内容は毎回作る
+//    （セッション中は「取りこぼし」判定にも掛からないため、通知しないと本文が誰にも届かない）。
+//    ただし実際のpushは呼び出し側（noteZumenContinue）で1時間に1回まで間引く（CEO裁定D-1）。
+// suppressedSinceLast: 前回の通知から間引かれた（=pushしなかった）件数。0件なら文言に載せない。
+function buildZumenContinueNotifyText(userName, text, suppressedSinceLast) {
+  const suppressedLine = suppressedSinceLast > 0 ? `（この間に${suppressedSinceLast}件）\n` : '';
+  return (
+    '📐 図面の向こう側の読者から続きのメッセージ\n\n' +
+    `お名前：${userName}\n` +
+    `受信：${nowJSTDisplay()}\n` +
+    suppressedLine +
+    `本文：${truncateBody(text)}\n\n` +
+    'Botは中立の受付文だけ返しています。\n' +
+    'LINEの公式アカウントのトークを開いてご確認ください。'
+  );
+}
+
+// 無料相談セッション中に、完全一致の別合言葉で抜けたときの通知（2026-09-30追加）
+// 🔴 抜け出し先の分岐自体が通知するかどうかとは無関係に、必ずこの通知を出す
+//    （CEO裁定：「無料相談中の人が別の合言葉で抜けた」ことが分かるようにする）。
+function buildZumenExitNotifyText(userName, text) {
+  return (
+    '🔓 無料相談中の人が別の合言葉で抜けました\n\n' +
+    `お名前：${userName}\n` +
+    `受信：${nowJSTDisplay()}\n` +
+    `本文：${truncateBody(text)}\n\n` +
+    '無料相談セッションはここで終了しています。\n' +
+    '抜け出し先の案内はBotが自動で返しています。'
+  );
+}
+
+// 保存先ボリュームが無い（セッション永続化ができていない）場合の安全網通知（2026-09-30追加）
+// 🔴 CEO裁定C：無料相談セッション中かどうかに関係なく、住まいの言葉を含むメッセージは必ず通知する。
+function buildNoVolumeHousingNotifyText(userName, text) {
+  return (
+    '⚠️ 永続化なしの状態で住まいの言葉を含むメッセージが届きました\n\n' +
+    `お名前：${userName}\n` +
+    `受信：${nowJSTDisplay()}\n` +
+    `本文：${truncateBody(text)}\n\n` +
+    '無料相談セッションの保存先ボリュームが設定されていないため、\n' +
+    'セッション状態に関係なくこの通知を出しています。\n' +
+    'LINEの公式アカウントのトークを開いてご確認ください。'
+  );
 }
 
 // 申込通知の文面（相談希望・個別相談希望のいずれの合言葉にも反応する共通文面）
@@ -1445,8 +1938,8 @@ function buildNotifyTestReplyMessage(result) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.11.0',
-    updated: '2026-08-22',
+    version: '2.15.0',
+    updated: '2026-09-30',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
@@ -1466,7 +1959,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.11.0',
+    version: '2.15.0',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -1492,6 +1985,14 @@ function requireDebugToken(req, res) {
 app.get('/debug/step', (req, res) => {
   if (!requireDebugToken(req, res)) return;
   res.json(stepDelivery.getStatus());
+});
+
+// 『図面の向こう側』無料相談セッションの永続化状態の確認（2026-09-30追加）
+// 使い方: /debug/zumen?token=<DEBUG_TOKEN>
+// persistent が false の場合、Railwayにボリュームが未設定＝再起動でセッションが失われる。
+app.get('/debug/zumen', (req, res) => {
+  if (!requireDebugToken(req, res)) return;
+  res.json(zumenSession.getStatus());
 });
 
 // 文面の確認（送信しない）: /debug/step/preview?token=<DEBUG_TOKEN>
@@ -1521,10 +2022,23 @@ app.get('/debug/step/run', (req, res) => {
 });
 
 // ── サーバー起動 ────────────────────────────────────────
+// 🔴 2026-09-30 追加：require.main === module のときだけ実際に起動する。
+//    `node index.js` で動かす本番・開発時の挙動は変わらない（require.main は常に module）。
+//    ローカル試験スクリプトが getReply()/classify() を呼ぶために require() するときだけ、
+//    サーバー起動とステップ配信初期化をスキップする（ポート占有・外部API呼び出しの副作用を避ける）。
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`LINE Bot v2.11.0 起動中: http://localhost:${PORT}`);
-  console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
-  // ステップ配信の初期化（既定では配信フラグがオフなので、何も送らない）
-  stepDelivery.init({ client, pushLog });
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`LINE Bot v2.15.0 起動中: http://localhost:${PORT}`);
+    console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
+    // ステップ配信の初期化（既定では配信フラグがオフなので、何も送らない）
+    stepDelivery.init({ client, pushLog });
+    // 『図面の向こう側』無料相談セッションの永続化を初期化（2026-09-30追加）
+    zumenSession.init();
+  });
+}
+
+// ── テスト用エクスポート（2026-09-30追加）───────────────────
+// 本番の起動・Webhook処理には一切影響しない（追加のみ）。ローカル試験スクリプトが
+// 合言葉分岐（getReply）・通知判定（classify）を直接呼べるようにするためのもの。
+module.exports = { getReply, classify, defaultReplyText, handleEvent };
