@@ -554,6 +554,7 @@ const ZUMEN_EXIT_ALLOWLIST = new Set([
   'AI社長', 'ＡＩ社長', 'AIシャチョウ', 'ＡＩシャチョウ', 'エーアイ社長',
   '体の点検', 'からだの点検', 'カラダの点検', '体のてんけん',
   '箱舟', 'はこぶね', 'ハコブネ', '方舟',
+  '宅建', 'たっけん', 'タッケン', // 2026-10-06 追加（CEO裁定。ほかの表記ゆれは isTakkenKeyword が拾う）
   '名刺', '舞台裏', '本づくり', '本作り',
   'マイID', 'マイid', 'マイＩＤ', 'マイＩｄ',
 ]);
@@ -572,6 +573,8 @@ function resolveZumenState(text, userId) {
     // classify() 側の既存ロジック（stepDelivery.isStepKeyword）で 'step_reply' として出す。
     if (stepDelivery.isStepKeyword(text)) return 'step_priority';
     if (ZUMEN_EXIT_ALLOWLIST.has(text.trim())) return 'exit';
+    // 【宅建】2026-10-06 CEO裁定で許可リストに追加（巻末で約束した受付の取りこぼし防止）。表記ゆれは「ほぼ完全一致」で判定。
+    if (isTakkenKeyword(text)) return 'exit';
     return 'intercept';
   }
   return 'none';
@@ -593,10 +596,8 @@ function zumenInterceptReplyText() {
 // ── キーワード別返信 ────────────────────────────────────
 // 【宅建】『物語で頭に残る 宅建・民法 第1巻 総則』巻末の約束「合言葉『宅建』を送れば、第2巻以降の
 //        発売をお知らせします」の受付（2026-10-06）。
-const TAKKEN_KEYWORD_RE = /宅建|たっけん|タッケン/;
-function isTakkenKeyword(text) {
-  return typeof text === 'string' && TAKKEN_KEYWORD_RE.test(text);
-}
+// 判定は friendList.isTakkenKeyword（ほぼ完全一致。部分一致ではない。CEO指示 2026-10-06）。
+const isTakkenKeyword = friendList.isTakkenKeyword;
 function takkenReplyText() {
   return (
     '合言葉、ありがとうございます。\n' +
@@ -605,7 +606,7 @@ function takkenReplyText() {
     '第2巻以降の発売が決まりましたら、このLINEでお知らせします。\n' +
     '\n' +
     '■ お預かりする情報について\n' +
-    'お知らせをお送りするため、この合言葉をお送りいただいた方として記録しました。発売のお知らせ以外には使いません。\n' +
+    'お知らせをお送りするため、この合言葉をお送りいただいた方として記録しました。この記録は、発売のお知らせ以外には使いません。\n' +
     'お知らせが不要になりましたら、このアカウントをブロックしていただければ送られなくなります。\n' +
     '\n' +
     'カツヤス'

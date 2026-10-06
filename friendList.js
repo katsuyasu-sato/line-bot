@@ -120,6 +120,22 @@ function init() {
 //    ・マイID（オーナー用の診断）、ステップ配信の返信語（実家の話／本の話／出版の話）は入口ではない。
 //    ・合言葉に当たらない一般の文は null（入口は未確定のまま。次に合言葉が来たら記録する）。
 //    合言葉を増やしたら index.js と keywords_master.md と、この表の3点を揃えること。
+// ── 合言葉「宅建」の判定（2026-10-06 CEO指示：部分一致ではなく「ほぼ完全一致」）──
+// 前後の空白・「」『』“”"'・句読点・！？・末尾の「です」を除いた結果が3表記のどれかに一致したときだけ true。
+// 例：「宅建」「『宅建』」「宅建です」「たっけん。」は true／「宅建の勉強どうやるの？」「宅建業者に相談したい」は false。
+const TAKKEN_WORDS = new Set(['宅建', 'たっけん', 'タッケン']);
+const TAKKEN_EDGE = /^[\s　「」『』"'“”‘’。、．，.,！!？?~〜…・]+|[\s　「」『』"'“”‘’。、．，.,！!？?~〜…・]+$/g;
+function isTakkenKeyword(text) {
+  if (typeof text !== 'string') return false;
+  let t = text;
+  for (let i = 0; i < 5; i++) {
+    const before = t;
+    t = t.replace(TAKKEN_EDGE, '').replace(/です$/, '');
+    if (t === before) break;
+  }
+  return TAKKEN_WORDS.has(t);
+}
+
 const ENTRY_RULES = [
   { label: '図面', test: (t) => /図面|ずめん|ズメン/.test(t) },
   { label: '副業本', test: (t) => t.includes('副業') },
@@ -144,7 +160,7 @@ const ENTRY_RULES = [
   { label: '体の点検', test: (t) => /体の点検|からだの点検|カラダの点検|体のてんけん/.test(t) },
   { label: 'AI社長', test: (t) => /AI社長|ＡＩ社長|AIシャチョウ|ＡＩシャチョウ|エーアイ社長/.test(t) },
   { label: '箱舟', test: (t) => /箱舟|はこぶね|ハコブネ|方舟/.test(t) },
-  { label: '宅建', test: (t) => /宅建|たっけん|タッケン/.test(t) },
+  { label: '宅建', test: (t) => isTakkenKeyword(t) },
   { label: '名刺', test: (t) => /名刺|舞台裏|本づくり|本作り/.test(t) },
 ];
 
@@ -428,5 +444,5 @@ function _getRecordForTest(userId) {
 
 module.exports = {
   init, getHealth, detectEntry, recordFollow, setDisplayName, recordUnfollow, recordMessage,
-  recordSubscription, listSubscribers, listRows, toCsv, toHtml, getStatus, isPersistent, _resetForTest, _getRecordForTest,
+  recordSubscription, listSubscribers, isTakkenKeyword, listRows, toCsv, toHtml, getStatus, isPersistent, _resetForTest, _getRecordForTest,
 };

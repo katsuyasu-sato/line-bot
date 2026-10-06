@@ -78,6 +78,42 @@ const lastReplyText = () => { const r = stub.calls.reply[stub.calls.reply.length
   await sendWebhook(port, [msg('U_E', 'こんにちは')]); await sleep(150);
   ok(lastReplyText().includes('が見つかりませんでした'), 'R4 無関係な文は従来のデフォルト返信');
 
+  // ── 判定は「ほぼ完全一致」（CEO指示 2026-10-06）──
+  const pos = ['宅建', '『宅建』', '「宅建」', '宅建です', 'たっけん。', ' 宅建 ', '宅建！', '"宅建"', 'タッケン'];
+  const neg = ['宅建の勉強どうやるの？', '宅建業者に相談したい', '宅建士について', '宅建って何ですか'];
+  for (const t of pos) ok(friendList.isTakkenKeyword(t) === true, `N1 陽性対照 判定 ${JSON.stringify(t)} -> true`);
+  for (const t of neg) ok(friendList.isTakkenKeyword(t) === false, `N2 陰性対照 判定 ${JSON.stringify(t)} -> false`);
+  // 実サーバー経由：陽性は受付・購読、陰性は受付文も購読も出ない
+  const sv = (u, t) => sendWebhook(port, [msg(u, t)]).then(() => sleep(150));
+  for (const [i, t] of ['『宅建』', '宅建です', 'たっけん。'].entries()) {
+    const u = 'U_P' + i; stub.profiles[u] = u;
+    await sv(u, t);
+    ok(lastReplyText().includes('宅建・民法') && friendList._getRecordForTest(u).subscriptions.takken, `N3 実送信 ${t} で受付・購読`);
+  }
+  for (const [i, t] of ['宅建の勉強どうやるの？', '宅建業者に相談したい'].entries()) {
+    const u = 'U_N' + i; stub.profiles[u] = u;
+    await sv(u, t);
+    const rec = friendList._getRecordForTest(u);
+    ok(!lastReplyText().includes('宅建・民法') && !(rec.subscriptions && rec.subscriptions.takken) && rec.entry !== '宅建', `N4 実送信 ${t} は受付も購読もされない`);
+  }
+  // ── 無料相談セッション中に「宅建」が送られた場合 ──
+  for (const [i, t] of ['宅建', 'たっけん', 'タッケン', '『宅建』'].entries()) {
+    const u = 'U_Z' + i; stub.profiles[u] = u;
+    await sv(u, '図面');
+    ok(lastReplyText().includes('無料相談'), `Z1 (${t}) 図面でセッション開始`);
+    await sv(u, t);
+    const rec = friendList._getRecordForTest(u);
+    ok(lastReplyText().includes('宅建・民法') && rec.subscriptions && rec.subscriptions.takken, `Z2 セッション中の ${t} で受付・購読される`);
+    await sv(u, '屋根のことで');
+    ok(lastReplyText().includes('無料相談の続き') === false, `Z3 (${t}) 抜けた後は無料相談の続き扱いにならない`);
+  }
+  {
+    // 陰性：セッション中の「宅建の勉強どうやるの？」は抜け出さず中立文のまま・購読されない
+    const u = 'U_ZN'; stub.profiles[u] = u;
+    await sv(u, '図面'); await sv(u, '宅建の勉強どうやるの？');
+    ok(lastReplyText().includes('無料相談の続き') && !friendList._getRecordForTest(u).subscriptions.takken, 'Z4 セッション中の「宅建の勉強…」は抜け出さず購読もされない');
+  }
+
   // 永続化：ファイルに購読が残り、再読込でも復元される
   const saved = JSON.parse(fs.readFileSync(path.join(tmp, 'friends.json'), 'utf8'));
   ok(saved.friends.U_A.subscriptions.takken.at === at1, 'P1 friends.json に購読が保存されている');
@@ -88,7 +124,7 @@ const lastReplyText = () => { const r = stub.calls.reply[stub.calls.reply.length
   // 返信文の体裁
   const t = lastReplyTextForTakken();
   function lastReplyTextForTakken() { return stub.calls.reply.map((r) => r.messages.map((m) => m.text || '').join('\n')).find((x) => x.includes('宅建・民法')); }
-  ok(!t.includes('---') && !/[0-9０-９]+月|必ず|確実|絶対/.test(t), 'S1 罫線なし・月・確約語なし');
+  ok(!t.includes('---') && t.includes('この記録は、発売のお知らせ以外には使いません') && !/[0-9０-９]+月|必ず|確実|絶対/.test(t), 'S1 罫線なし・月・確約語なし');
   ok(t.split('\n').every((l) => l.length <= 100), 'S2 1行100字以内（文字の壁なし）');
 
   server.close();
