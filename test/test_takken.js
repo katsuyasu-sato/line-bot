@@ -114,6 +114,34 @@ const lastReplyText = () => { const r = stub.calls.reply[stub.calls.reply.length
     ok(lastReplyText().includes('無料相談の続き') && !friendList._getRecordForTest(u).subscriptions.takken, 'Z4 セッション中の「宅建の勉強…」は抜け出さず購読もされない');
   }
 
+  // ── reply が失敗したときは購読を記録しない（監査指摘2）──
+  {
+    const u = 'U_RF'; stub.profiles[u] = u;
+    stub.failures.reply = true;
+    await sv(u, '宅建');
+    stub.failures.reply = false;
+    const rec = friendList._getRecordForTest(u);
+    ok(!(rec && rec.subscriptions && rec.subscriptions.takken), 'RF1 reply失敗時は購読を記録しない', rec);
+    await sv(u, '宅建'); // 送り直しで登録される（陽性対照）
+    ok(friendList._getRecordForTest(u).subscriptions.takken, 'RF2 送り直して reply 成功なら記録される');
+    // 他の分岐は reply 失敗でも従来どおり名簿に記録される（挙動不変）
+    const u2 = 'U_RF2'; stub.profiles[u2] = u2;
+    stub.failures.reply = true; await sv(u2, '箱舟'); stub.failures.reply = false;
+    ok(friendList._getRecordForTest(u2).entry === '箱舟', 'RF3 他の合言葉は reply 失敗でも従来どおり入口が記録される');
+  }
+  // ── ブロックで購読を削除。再フォローで自動復活しない（監査指摘3）──
+  {
+    const u = 'U_BL'; stub.profiles[u] = u;
+    await sv(u, '宅建');
+    ok(friendList._getRecordForTest(u).subscriptions.takken, 'BL1 ブロック前は購読あり');
+    await sendWebhook(port, [{ type: 'unfollow', source: { type: 'user', userId: u } }]); await sleep(120);
+    ok(Object.keys(friendList._getRecordForTest(u).subscriptions).length === 0 && !friendList.listSubscribers('takken').some((x) => x.userId === u), 'BL2 ブロックで購読が削除される');
+    await sendWebhook(port, [{ type: 'follow', replyToken: 'rt', source: { type: 'user', userId: u } }]); await sleep(150);
+    ok(!friendList._getRecordForTest(u).subscriptions.takken, 'BL3 再フォローしても自動復活しない');
+    await sv(u, '宅建');
+    ok(friendList._getRecordForTest(u).subscriptions.takken, 'BL4 もう一度「宅建」を送れば再登録される');
+  }
+
   // 永続化：ファイルに購読が残り、再読込でも復元される
   const saved = JSON.parse(fs.readFileSync(path.join(tmp, 'friends.json'), 'utf8'));
   ok(saved.friends.U_A.subscriptions.takken.at === at1, 'P1 friends.json に購読が保存されている');
@@ -124,7 +152,7 @@ const lastReplyText = () => { const r = stub.calls.reply[stub.calls.reply.length
   // 返信文の体裁
   const t = lastReplyTextForTakken();
   function lastReplyTextForTakken() { return stub.calls.reply.map((r) => r.messages.map((m) => m.text || '').join('\n')).find((x) => x.includes('宅建・民法')); }
-  ok(!t.includes('---') && t.includes('この記録は、発売のお知らせ以外には使いません') && !/[0-9０-９]+月|必ず|確実|絶対/.test(t), 'S1 罫線なし・月・確約語なし');
+  ok(!t.includes('---') && t.includes('この記録は、発売のお知らせと、私の発信を見直すためだけに使います。') && !/[0-9０-９]+月|必ず|確実|絶対/.test(t), 'S1 罫線なし・月・確約語なし');
   ok(t.split('\n').every((l) => l.length <= 100), 'S2 1行100字以内（文字の壁なし）');
 
   server.close();

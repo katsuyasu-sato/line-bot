@@ -248,6 +248,8 @@ function recordUnfollow(userId) {
     const rec = getOrCreate(userId, now); // follow記録がない人でもブロックされた事実は残す
     rec.blockedAt = now;
     rec.lastBlockedAt = now;
+    // 購読（お知らせ希望）はブロックで取り消す。再フォローしても自動復活しない（もう一度合言葉を送れば再登録）。
+    rec.subscriptions = {};
     saveStore();
   } catch (e) {
     console.error('[FRIENDS] recordUnfollow 失敗（' + (e && e.name) + '）');

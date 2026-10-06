@@ -3,9 +3,12 @@
 const line = require('@line/bot-sdk');
 const calls = { reply: [], push: [], profile: [] };
 const profiles = {}; // userId -> displayName
-const failures = { profile: false, push: false };
+const failures = { profile: false, push: false, reply: false };
 const P = line.messagingApi.MessagingApiClient.prototype;
-P.replyMessage = async function (req) { calls.reply.push(req); return {}; };
+P.replyMessage = async function (req) {
+  if (failures.reply) throw new Error('reply failed (stub)');
+  calls.reply.push(req); return {};
+};
 P.pushMessage = async function (req) {
   if (failures.push) throw new Error('push failed (stub)');
   calls.push.push(req); return {};

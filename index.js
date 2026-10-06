@@ -206,12 +206,13 @@ async function handleEvent(event) {
     const reply = getReply(text, userName, userId);
     // getReply は単一メッセージ（オブジェクト）または複数メッセージ（配列）を返す
     const messages = Array.isArray(reply) ? reply : [reply];
-    await safeReply(event.replyToken, messages, 'message');
+    const replyOk = await safeReply(event.replyToken, messages, 'message');
     // 友だち名簿（2026-10-04）：返信の後に記録。例外は friendList 内で握りつぶす。
     const friendResult = friendList.recordMessage(userId, { displayName: fetchedName, text });
-    // 【宅建】返信が実際に「宅建」の受付文だったときだけ、お知らせ希望（購読者）として記録する。
-    // 無料相談セッション中などで別の返信になった場合は、約束した返信をしていないので記録しない。
-    if (messages[0] && messages[0].type === 'text' && messages[0].text === takkenReplyText()) {
+    // 【宅建】返信が実際に「宅建」の受付文で、かつ reply が成功したときだけ、お知らせ希望（購読者）として記録する。
+    // 無料相談セッション中などで別の返信になった場合、または reply が失敗して受付文が届いていない場合は、
+    // 約束した返信をしていないので記録しない（送り直しの合言葉で再登録できる）。
+    if (replyOk === true && messages[0] && messages[0].type === 'text' && messages[0].text === takkenReplyText()) {
       friendList.recordSubscription(userId, 'takken'); // 例外は friendList 内で握りつぶす
     }
     // 【オーナー裁定 2026-10-04】入口の合言葉が最初に届いたとき、オーナーへ1人1回だけ通知する。
@@ -360,6 +361,7 @@ async function safeReply(replyToken, messages, label) {
   try {
     await client.replyMessage({ replyToken, messages });
     pushLog({ kind: 'reply_ok', label, msg_count: messages.length });
+    return true; // 成否を返す（呼び出し側が無視しても既存の挙動は変わらない）
   } catch (err) {
     const status =
       err &&
@@ -396,6 +398,7 @@ async function safeReply(replyToken, messages, label) {
 
     console.error(`[REPLY] ${label} failed status=${status} msg=${detail} body=${apiBodyStr}`);
     pushLog({ kind: 'reply_error', label, status, detail, api_body: apiBodyStr });
+    return false;
   }
 }
 
@@ -606,7 +609,7 @@ function takkenReplyText() {
     '第2巻以降の発売が決まりましたら、このLINEでお知らせします。\n' +
     '\n' +
     '■ お預かりする情報について\n' +
-    'お知らせをお送りするため、この合言葉をお送りいただいた方として記録しました。この記録は、発売のお知らせ以外には使いません。\n' +
+    'お知らせをお送りするため、この合言葉をお送りいただいた方として記録しました。この記録は、発売のお知らせと、私の発信を見直すためだけに使います。\n' +
     'お知らせが不要になりましたら、このアカウントをブロックしていただければ送られなくなります。\n' +
     '\n' +
     'カツヤス'
@@ -1496,7 +1499,9 @@ function getReply(text, userName, userId) {
   // 【合言葉】『物語で頭に残る 宅建・民法 第1巻 総則』（Kindle）読者向け・続巻の発売お知らせ受付
   // 合言葉: 「宅建」「たっけん」「タッケン」（rules/keywords_master.md・2026-10-06 登録）
   // 返信は reply（push枠を消費しない）。送信者の記録は messageイベント側で
-  // friendList.recordSubscription(userId, 'takken') が行う（このreplyが実際に返ったときだけ）。
+  // friendList.recordSubscription(userId, 'takken') が行う。条件＝この受付文が1通目で、かつ
+  // safeReply が成功（replyが届いた）したときだけ。失敗時は記録しない。
+  // unfollow（ブロック）を受けると friendList.recordUnfollow が購読を削除する（再フォローで自動復活しない）。
   // 🔴 発売時期・冊数は書かない（景表法・確約しない）。
   // 設置位置＝箱舟の直後・名刺の前。「相談」「図面」等より後ろにある点は他の本の合言葉と同じ扱い。
   if (isTakkenKeyword(text)) {
