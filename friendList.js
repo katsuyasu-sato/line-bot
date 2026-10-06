@@ -144,6 +144,7 @@ const ENTRY_RULES = [
   { label: '体の点検', test: (t) => /体の点検|からだの点検|カラダの点検|体のてんけん/.test(t) },
   { label: 'AI社長', test: (t) => /AI社長|ＡＩ社長|AIシャチョウ|ＡＩシャチョウ|エーアイ社長/.test(t) },
   { label: '箱舟', test: (t) => /箱舟|はこぶね|ハコブネ|方舟/.test(t) },
+  { label: '宅建', test: (t) => /宅建|たっけん|タッケン/.test(t) },
   { label: '名刺', test: (t) => /名刺|舞台裏|本づくり|本作り/.test(t) },
 ];
 
@@ -174,6 +175,7 @@ function newRecord(now) {
     lastBlockedAt: null,
     refollowCount: 0,
     messageCount: 0,
+    subscriptions: {}, // 「お知らせ希望」の記録。例：{ takken: { at: ISO日時 } }（2026-10-06 新設）
   };
 }
 
@@ -263,6 +265,37 @@ function recordMessage(userId, opts = {}) {
   }
 }
 
+// ── お知らせ購読（2026-10-06 新設）──────────────────────
+// 本の巻末で「合言葉を送れば、続巻の発売をお知らせします」と約束した相手の記録。
+// 入口（entry）は「最初の合言葉」1つだけで上書きされないため、購読は別の欄に持つ。
+// 例：名刺から来た人があとで「宅建」を送っても、購読には必ず入る。
+function recordSubscription(userId, key) {
+  try {
+    if (!userId || !key) return null;
+    const now = nowIso();
+    const rec = getOrCreate(userId, now);
+    if (!rec.subscriptions || typeof rec.subscriptions !== 'object') rec.subscriptions = {};
+    const isNew = !rec.subscriptions[key];
+    if (isNew) rec.subscriptions[key] = { at: now };
+    saveStore();
+    return { isNew };
+  } catch (e) {
+    console.error('[FRIENDS] recordSubscription 失敗（' + (e && e.name) + '）');
+    return null;
+  }
+}
+
+// 購読者の一覧（ブロック・削除中の人は除く＝送っても届かないため）。続巻の発売時のお知らせ送信用。
+function listSubscribers(key) {
+  try {
+    return Object.entries(store.friends)
+      .filter(([, r]) => r.subscriptions && r.subscriptions[key] && !r.blockedAt)
+      .map(([userId, r]) => ({ userId, subscribedAt: r.subscriptions[key].at }));
+  } catch (e) {
+    return [];
+  }
+}
+
 // ── 閲覧（HTML・CSV）──────────────────────────────────
 function toJst(iso) {
   if (!iso) return '';
@@ -290,12 +323,14 @@ function listRows(ownerId) {
       lastBlockedAt: toJst(r.lastBlockedAt || ''),
       refollowCount: r.refollowCount || 0,
       messageCount: r.messageCount || 0,
+      subscriptions: Object.keys(r.subscriptions || {}).join('・'),
     }));
 }
 
 const CSV_HEADER = [
   '表示名', '状態', '友だちになった日時', '入口（最初の合言葉）', '入口の日時',
   '最後のメッセージ日時', 'ブロック・削除の日時', '再追加回数', 'メッセージ数', '区分', 'userId',
+  'お知らせ希望',
 ];
 
 function csvCell(v) {
@@ -312,6 +347,7 @@ function toCsv(ownerId) {
       [
         r.displayName, r.status, r.followedAt, r.entry, r.entryAt, r.lastMessageAt,
         r.blockedAt, r.refollowCount, r.messageCount, r.isOwner ? 'オーナー' : '', r.userId,
+        r.subscriptions,
       ].map(csvCell).join(',')
     );
   }
@@ -392,5 +428,5 @@ function _getRecordForTest(userId) {
 
 module.exports = {
   init, getHealth, detectEntry, recordFollow, setDisplayName, recordUnfollow, recordMessage,
-  listRows, toCsv, toHtml, getStatus, isPersistent, _resetForTest, _getRecordForTest,
+  recordSubscription, listSubscribers, listRows, toCsv, toHtml, getStatus, isPersistent, _resetForTest, _getRecordForTest,
 };

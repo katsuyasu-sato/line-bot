@@ -127,7 +127,7 @@ const msg = (u, t) => ({ type: 'message', replyToken: 'rt', source: { type: 'use
   ok(text.includes('田中太郎(試験)') && text.includes('"箱舟"') && text.includes('"オーナー"'), 'F7 CSVに表示名・入口・オーナー区分');
   ok(!text.includes('"=HYPERLINK') && text.includes('"\'=HYPERLINK'), 'F8 先頭が = の表示名は式として出ない');
   const health = JSON.parse((await q('/health')).buf.toString());
-  ok(health.version === '2.16.0' && health.friend_list.persistent === true && !('friendsTotal' in health.friend_list) && !('friendsActive' in health.friend_list) && !JSON.stringify(health).includes('田中'), 'F9 /healthは2.16.0・persistentのみ（人数も名前も出さない）', health.friend_list);
+  ok(health.version === '2.17.0' && health.friend_list.persistent === true && !('friendsTotal' in health.friend_list) && !('friendsActive' in health.friend_list) && !JSON.stringify(health).includes('田中'), 'F9 /healthは2.17.0・persistentのみ（人数も名前も出さない）', health.friend_list);
   const saved = fs.readFileSync(path.join(tmp, 'friends.json'), 'utf8');
   ok(saved.includes('U_ALICE'), 'F10 ボリュームにfriends.jsonが書かれている');
 

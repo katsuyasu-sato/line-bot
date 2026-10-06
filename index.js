@@ -209,6 +209,11 @@ async function handleEvent(event) {
     await safeReply(event.replyToken, messages, 'message');
     // 友だち名簿（2026-10-04）：返信の後に記録。例外は friendList 内で握りつぶす。
     const friendResult = friendList.recordMessage(userId, { displayName: fetchedName, text });
+    // 【宅建】返信が実際に「宅建」の受付文だったときだけ、お知らせ希望（購読者）として記録する。
+    // 無料相談セッション中などで別の返信になった場合は、約束した返信をしていないので記録しない。
+    if (messages[0] && messages[0].type === 'text' && messages[0].text === takkenReplyText()) {
+      friendList.recordSubscription(userId, 'takken'); // 例外は friendList 内で握りつぶす
+    }
     // 【オーナー裁定 2026-10-04】入口の合言葉が最初に届いたとき、オーナーへ1人1回だけ通知する。
     // オーナー本人には送らない。失敗しても握りつぶす（返信は送信済み）。上限は notifyOwner の既存ルールに従う。
     if (friendResult && friendResult.newEntry && userId !== process.env.OWNER_USER_ID) {
@@ -586,6 +591,27 @@ function zumenInterceptReplyText() {
 }
 
 // ── キーワード別返信 ────────────────────────────────────
+// 【宅建】『物語で頭に残る 宅建・民法 第1巻 総則』巻末の約束「合言葉『宅建』を送れば、第2巻以降の
+//        発売をお知らせします」の受付（2026-10-06）。
+const TAKKEN_KEYWORD_RE = /宅建|たっけん|タッケン/;
+function isTakkenKeyword(text) {
+  return typeof text === 'string' && TAKKEN_KEYWORD_RE.test(text);
+}
+function takkenReplyText() {
+  return (
+    '合言葉、ありがとうございます。\n' +
+    '『物語で頭に残る 宅建・民法 第1巻 総則』を読んでくださって、ありがとうございます。\n' +
+    '\n' +
+    '第2巻以降の発売が決まりましたら、このLINEでお知らせします。\n' +
+    '\n' +
+    '■ お預かりする情報について\n' +
+    'お知らせをお送りするため、この合言葉をお送りいただいた方として記録しました。発売のお知らせ以外には使いません。\n' +
+    'お知らせが不要になりましたら、このアカウントをブロックしていただければ送られなくなります。\n' +
+    '\n' +
+    'カツヤス'
+  );
+}
+
 function getReply(text, userName, userId) {
 
   // 【合言葉】『マンガ図面の向こう側』（ASIN B0GGBV5D59）読者の無料相談受付・無料相談セッション
@@ -1466,6 +1492,16 @@ function getReply(text, userName, userId) {
     ];
   }
 
+  // 【合言葉】『物語で頭に残る 宅建・民法 第1巻 総則』（Kindle）読者向け・続巻の発売お知らせ受付
+  // 合言葉: 「宅建」「たっけん」「タッケン」（rules/keywords_master.md・2026-10-06 登録）
+  // 返信は reply（push枠を消費しない）。送信者の記録は messageイベント側で
+  // friendList.recordSubscription(userId, 'takken') が行う（このreplyが実際に返ったときだけ）。
+  // 🔴 発売時期・冊数は書かない（景表法・確約しない）。
+  // 設置位置＝箱舟の直後・名刺の前。「相談」「図面」等より後ろにある点は他の本の合言葉と同じ扱い。
+  if (isTakkenKeyword(text)) {
+    return { type: 'text', text: takkenReplyText() };
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // 🔴【一時無効化 2026-09-30】合言葉「空き家」「あきや」「空家」の分岐
   //
@@ -2011,8 +2047,8 @@ function buildNotifyTestReplyMessage(result) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.16.0',
-    updated: '2026-10-04',
+    version: '2.17.0',
+    updated: '2026-10-06',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
@@ -2033,7 +2069,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.16.0',
+    version: '2.17.0',
     count: debugLog.length,
     entries: debugLog,
   });
@@ -2142,7 +2178,7 @@ app.get('/debug/step/run', (req, res) => {
 const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`LINE Bot v2.16.0 起動中: http://localhost:${PORT}`);
+    console.log(`LINE Bot v2.17.0 起動中: http://localhost:${PORT}`);
     console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
     // ステップ配信の初期化（既定では配信フラグがオフなので、何も送らない）
     stepDelivery.init({ client, pushLog });
