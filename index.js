@@ -212,8 +212,12 @@ async function handleEvent(event) {
     // 【宅建】返信が実際に「宅建」の受付文で、かつ reply が成功したときだけ、お知らせ希望（購読者）として記録する。
     // 無料相談セッション中などで別の返信になった場合、または reply が失敗して受付文が届いていない場合は、
     // 約束した返信をしていないので記録しない（送り直しの合言葉で再登録できる）。
-    if (replyOk === true && messages[0] && messages[0].type === 'text' && messages[0].text === takkenReplyText()) {
+    // 【2026-10-10】巻ごとの合言葉（宅建2 等）も同じ購読リスト 'takken' に入れる（どの巻から来ても続巻のお知らせが届く）。
+    //  どの巻から来たかは 'takken' + 巻 の欄にも残す（第2巻以降。数えるため）。
+    const takkenVol = friendList.takkenVolume(text);
+    if (replyOk === true && takkenVol && messages[0] && messages[0].type === 'text' && messages[0].text === takkenReplyText(takkenVol)) {
       friendList.recordSubscription(userId, 'takken'); // 例外は friendList 内で握りつぶす
+      if (takkenVol >= 2) friendList.recordSubscription(userId, 'takken' + takkenVol);
     }
     // 【オーナー裁定 2026-10-04】入口の合言葉が最初に届いたとき、オーナーへ1人1回だけ通知する。
     // オーナー本人には送らない。失敗しても握りつぶす（返信は送信済み）。上限は notifyOwner の既存ルールに従う。
@@ -601,12 +605,25 @@ function zumenInterceptReplyText() {
 //        発売をお知らせします」の受付（2026-10-06）。
 // 判定は friendList.isTakkenKeyword（ほぼ完全一致。部分一致ではない。CEO指示 2026-10-06）。
 const isTakkenKeyword = friendList.isTakkenKeyword;
-function takkenReplyText() {
+// 【2026-10-10 オーナー裁定】巻ごとに返事を変える。書名がまだ無い巻（未刊）はシリーズ名で返す。
+const TAKKEN_TITLES = {
+  1: '物語で頭に残る 宅建・民法 第1巻 総則',
+  2: '物語で頭に残る 宅建・民法 第2巻 物権',
+};
+function takkenReplyText(vol) {
+  const v = vol || 1;
+  const title = TAKKEN_TITLES[v];
+  const thanks = title
+    ? '『' + title + '』を読んでくださって、ありがとうございます。\n'
+    : '『物語で頭に残る 宅建』シリーズを読んでくださって、ありがとうございます。\n';
+  const next = title
+    ? '第' + (v + 1) + '巻以降の発売が決まりましたら、このLINEでお知らせします。\n'
+    : '次の巻の発売が決まりましたら、このLINEでお知らせします。\n';
   return (
     '合言葉、ありがとうございます。\n' +
-    '『物語で頭に残る 宅建・民法 第1巻 総則』を読んでくださって、ありがとうございます。\n' +
+    thanks +
     '\n' +
-    '第2巻以降の発売が決まりましたら、このLINEでお知らせします。\n' +
+    next +
     '\n' +
     '■ お預かりする情報について\n' +
     'お知らせをお送りするため、この合言葉をお送りいただいた方として記録しました。この記録は、発売のお知らせと、私の発信を見直すためだけに使います。\n' +
@@ -1504,8 +1521,9 @@ function getReply(text, userName, userId) {
   // unfollow（ブロック）を受けると friendList.recordUnfollow が購読を削除する（再フォローで自動復活しない）。
   // 🔴 発売時期・冊数は書かない（景表法・確約しない）。
   // 設置位置＝箱舟の直後・名刺の前。「相談」「図面」等より後ろにある点は他の本の合言葉と同じ扱い。
+  // 【2026-10-10】巻ごとの合言葉（宅建2・宅建２・たっけん2 等）は、その巻の返事を返す。
   if (isTakkenKeyword(text)) {
-    return { type: 'text', text: takkenReplyText() };
+    return { type: 'text', text: takkenReplyText(friendList.takkenVolume(text)) };
   }
 
   // ═══════════════════════════════════════════════════════════════

@@ -142,6 +142,37 @@ const lastReplyText = () => { const r = stub.calls.reply[stub.calls.reply.length
     ok(friendList._getRecordForTest(u).subscriptions.takken, 'BL4 もう一度「宅建」を送れば再登録される');
   }
 
+  // ── 2026-10-10 巻ごとの合言葉（宅建2 …）──
+  {
+    for (const [u, t] of [['U_V1', '宅建2'], ['U_V2', '宅建２'], ['U_V3', 'たっけん 2'], ['U_V4', '「タッケン２」です']]) {
+      stub.profiles[u] = u;
+      await sv(u, t);
+      const txt = lastReplyText();
+      ok(txt.includes('物語で頭に残る 宅建・民法 第2巻 物権') && txt.includes('第3巻以降の発売が決まりましたら') && !txt.includes('第1巻'), `V1 「${t}」で第2巻の受付文`, txt);
+      const rec = friendList._getRecordForTest(u);
+      ok(rec && rec.subscriptions && rec.subscriptions.takken && rec.subscriptions.takken2, `V2 「${t}」で takken と takken2 に記録`, rec);
+      ok(rec.entry === '宅建2', `V3 「${t}」で入口=宅建2`, rec.entry);
+    }
+    // 未刊の巻はシリーズ名で返す・購読は takken に入る
+    { const u = 'U_V5'; stub.profiles[u] = u; await sv(u, '宅建3');
+      const txt = lastReplyText();
+      ok(txt.includes('『物語で頭に残る 宅建』シリーズを読んでくださって') && txt.includes('次の巻の発売が決まりましたら'), 'V4 宅建3（未刊）はシリーズ名の受付文', txt);
+      ok(friendList._getRecordForTest(u).subscriptions.takken, 'V5 宅建3も takken に記録'); }
+    // 第1巻の「宅建」は従来どおり（回帰）
+    { const u = 'U_V6'; stub.profiles[u] = u; await sv(u, '宅建');
+      const txt = lastReplyText();
+      ok(txt.includes('第1巻 総則') && txt.includes('第2巻以降の発売') && !friendList._getRecordForTest(u).subscriptions.takken2, 'V6 「宅建」は第1巻の受付文のまま・takken2 は付かない'); }
+    // 陰性：範囲外・部分一致は合言葉にならない
+    for (const t of ['宅建12', '宅建0', '宅建2の勉強', '宅建業者2社']) {
+      const u = 'U_VN' + t; stub.profiles[u] = u; await sv(u, t);
+      const rec = friendList._getRecordForTest(u);
+      ok(!(rec && rec.subscriptions && rec.subscriptions.takken), `V7 「${t}」は合言葉にならない`, rec);
+    }
+    // 無料相談セッション中でも「宅建2」で抜け出して受付される
+    { const u = 'U_VZ'; stub.profiles[u] = u; await sv(u, '図面'); await sv(u, '宅建２');
+      ok(lastReplyText().includes('第2巻 物権') && friendList._getRecordForTest(u).subscriptions.takken2, 'V8 セッション中の「宅建２」で抜け出し受付'); }
+  }
+
   // 永続化：ファイルに購読が残り、再読込でも復元される
   const saved = JSON.parse(fs.readFileSync(path.join(tmp, 'friends.json'), 'utf8'));
   ok(saved.friends.U_A.subscriptions.takken.at === at1, 'P1 friends.json に購読が保存されている');

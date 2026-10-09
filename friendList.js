@@ -125,15 +125,26 @@ function init() {
 // 例：「宅建」「『宅建』」「宅建です」「たっけん。」は true／「宅建の勉強どうやるの？」「宅建業者に相談したい」は false。
 const TAKKEN_WORDS = new Set(['宅建', 'たっけん', 'タッケン']);
 const TAKKEN_EDGE = /^[\s　「」『』"'“”‘’。、．，.,！!？?~〜…・]+|[\s　「」『』"'“”‘’。、．，.,！!？?~〜…・]+$/g;
-function isTakkenKeyword(text) {
-  if (typeof text !== 'string') return false;
-  let t = text;
+// 【2026-10-10 オーナー裁定】巻ごとの合言葉「宅建2」「宅建3」…（第1巻は「宅建」のまま）。
+// 戻り値＝巻の番号（「宅建」＝1、「宅建2」＝2 … 10まで）。合言葉でなければ 0。
+// 全角数字（宅建２）・語と数字の間の空白（宅建 2）も受け付ける（NFKCで半角化してから判定）。
+// 「ほぼ完全一致」の方針は従来どおり：「宅建の勉強」「宅建業者」「宅建12」は 0。
+const TAKKEN_MAX_VOLUME = 10;
+function takkenVolume(text) {
+  if (typeof text !== 'string') return 0;
+  let t = text.normalize('NFKC');
   for (let i = 0; i < 5; i++) {
     const before = t;
     t = t.replace(TAKKEN_EDGE, '').replace(/です$/, '');
     if (t === before) break;
   }
-  return TAKKEN_WORDS.has(t);
+  const m = t.match(/^(宅建|たっけん|タッケン)\s*([0-9]{1,2})?$/);
+  if (!m || !TAKKEN_WORDS.has(m[1])) return 0;
+  const vol = m[2] === undefined ? 1 : parseInt(m[2], 10);
+  return vol >= 1 && vol <= TAKKEN_MAX_VOLUME ? vol : 0;
+}
+function isTakkenKeyword(text) {
+  return takkenVolume(text) > 0;
 }
 
 const ENTRY_RULES = [
@@ -160,7 +171,7 @@ const ENTRY_RULES = [
   { label: '体の点検', test: (t) => /体の点検|からだの点検|カラダの点検|体のてんけん/.test(t) },
   { label: 'AI社長', test: (t) => /AI社長|ＡＩ社長|AIシャチョウ|ＡＩシャチョウ|エーアイ社長/.test(t) },
   { label: '箱舟', test: (t) => /箱舟|はこぶね|ハコブネ|方舟/.test(t) },
-  { label: '宅建', test: (t) => isTakkenKeyword(t) },
+  { label: '宅建', test: (t) => isTakkenKeyword(t) }, // 巻ごとの入口名（宅建2 等）は detectEntry で付け替える
   { label: '名刺', test: (t) => /名刺|舞台裏|本づくり|本作り/.test(t) },
 ];
 
@@ -168,7 +179,13 @@ function detectEntry(text) {
   if (typeof text !== 'string' || !text) return null;
   if (/マイID|マイid|マイＩＤ|マイＩｄ/.test(text)) return null; // オーナー用の診断
   for (const r of ENTRY_RULES) {
-    if (r.test(text)) return r.label;
+    if (r.test(text)) {
+      if (r.label === '宅建') {
+        const v = takkenVolume(text);
+        return v >= 2 ? '宅建' + v : '宅建';
+      }
+      return r.label;
+    }
   }
   return null;
 }
@@ -446,5 +463,5 @@ function _getRecordForTest(userId) {
 
 module.exports = {
   init, getHealth, detectEntry, recordFollow, setDisplayName, recordUnfollow, recordMessage,
-  recordSubscription, listSubscribers, isTakkenKeyword, listRows, toCsv, toHtml, getStatus, isPersistent, _resetForTest, _getRecordForTest,
+  recordSubscription, listSubscribers, isTakkenKeyword, takkenVolume, listRows, toCsv, toHtml, getStatus, isPersistent, _resetForTest, _getRecordForTest,
 };
