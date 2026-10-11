@@ -609,6 +609,7 @@ const isTakkenKeyword = friendList.isTakkenKeyword;
 const TAKKEN_TITLES = {
   1: '物語で頭に残る 宅建・民法 第1巻 総則',
   2: '物語で頭に残る 宅建・民法 第2巻 物権',
+  3: '物語で頭に残る 宅建・民法 第3巻 債権',
 };
 function takkenReplyText(vol) {
   const v = vol || 1;
