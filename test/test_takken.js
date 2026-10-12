@@ -154,10 +154,10 @@ const lastReplyText = () => { const r = stub.calls.reply[stub.calls.reply.length
       ok(rec.entry === '宅建2', `V3 「${t}」で入口=宅建2`, rec.entry);
     }
     // 未刊の巻はシリーズ名で返す・購読は takken に入る
-    { const u = 'U_V5'; stub.profiles[u] = u; await sv(u, '宅建4');
+    { const u = 'U_V5'; stub.profiles[u] = u; await sv(u, '宅建5');
       const txt = lastReplyText();
-      ok(txt.includes('『物語で頭に残る 宅建』シリーズを読んでくださって') && txt.includes('次の巻の発売が決まりましたら'), 'V4 宅建4（未刊）はシリーズ名の受付文', txt);
-      ok(friendList._getRecordForTest(u).subscriptions.takken, 'V5 宅建4も takken に記録'); }
+      ok(txt.includes('『物語で頭に残る 宅建』シリーズを読んでくださって') && txt.includes('次の巻の発売が決まりましたら'), 'V4 宅建5（未刊）はシリーズ名の受付文', txt);
+      ok(friendList._getRecordForTest(u).subscriptions.takken, 'V5 宅建5も takken に記録'); }
     // 第1巻の「宅建」は従来どおり（回帰）
     { const u = 'U_V6'; stub.profiles[u] = u; await sv(u, '宅建');
       const txt = lastReplyText();
