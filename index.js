@@ -2073,8 +2073,8 @@ function buildNotifyTestReplyMessage(result) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.17.0',
-    updated: '2026-10-06',
+    version: '2.17.1',
+    updated: '2026-10-18',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
@@ -2095,7 +2095,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.17.0',
+    version: '2.17.1',
     count: debugLog.length,
     entries: debugLog,
   });
