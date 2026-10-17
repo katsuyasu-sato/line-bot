@@ -637,7 +637,8 @@ function takkenReplyText(vol) {
 
 function getReply(text, userName, userId) {
 
-  // 【合言葉】『マンガ図面の向こう側』（ASIN B0GGBV5D59）読者の無料相談受付・無料相談セッション
+  // 【合言葉】『マンガ図面の向こう側』（ASIN B0GGBV5D59）と、そのリメイク『図面は楽譜だ』
+  //    （2026-10 発行・巻末に同じ合言葉を掲載）の読者の無料相談受付・無料相談セッション
   // 合言葉: 「図面」「ずめん」「ズメン」
   // 🔴 2026-09-30 オーナー裁定：この本の巻末は「期間限定」と書いていたが期限は無く、
   //    Botの住宅相談案内は¥20,000の有料になっていて本の記載と食い違っていた（監査指摘）。
@@ -660,9 +661,9 @@ function getReply(text, userName, userId) {
         type: 'text',
         text:
           '合言葉、ありがとうございます。\n' +
-          '『マンガ図面の向こう側』を読んでいただき、ありがとうございます。\n' +
+          '『マンガ図面の向こう側』または『図面は楽譜だ』を読んでいただき、ありがとうございます。\n' +
           '\n' +
-          'こちらは、この本の読者の方への無料相談の受付です。\n' +
+          'こちらは、これらの本の読者の方への無料相談の受付です。\n' +
           '\n' +
           '間取り図の写真や、気になっていることを、そのままこのトークに送ってください。図面にお名前やご住所が入っている場合は、その部分を隠してお送りください。\n' +
           '\n' +
@@ -2073,8 +2074,8 @@ function buildNotifyTestReplyMessage(result) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '2.17.0',
-    updated: '2026-10-06',
+    version: '2.17.1',
+    updated: '2026-10-18',
     secret_set: !!config.channelSecret,
     token_set: !!config.channelAccessToken,
     debug_log_size: debugLog.length,
@@ -2095,7 +2096,7 @@ app.get('/debug/log', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
-    version: '2.17.0',
+    version: '2.17.1',
     count: debugLog.length,
     entries: debugLog,
   });
