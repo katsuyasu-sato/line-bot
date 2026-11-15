@@ -243,6 +243,8 @@ async function handleEvent(event) {
         }
       } else if (kind === 'zumen_exit') {
         await notifyOwner(buildZumenExitNotifyText(userName, text));
+      } else if (kind === 'zanka_soudan') {
+        await notifyOwner(buildZankaNotifyText(userName, text), { priority: 'high' });
       } else if (kind === 'soudan_apply') {
         await notifyOwner(buildSoudanApplyNotifyText(userName), { priority: 'high' });
       } else if (kind === 'doterra_interest') {
@@ -266,6 +268,7 @@ async function handleEvent(event) {
       if (
         kind !== 'zumen_soudan' &&
         kind !== 'zumen_continue' &&
+        kind !== 'zanka_soudan' &&
         !zumenSession.getStatus().persistent &&
         containsHousingWord(text)
       ) {
@@ -612,7 +615,7 @@ const TAKKEN_TITLES = {
   3: '物語で頭に残る 宅建・民法 第3巻 債権',
   4: '物語で頭に残る 宅建・民法 第4巻 相続と特別法',
   5: '物語で頭に残る 宅建 宅建業法 第5巻 免許と業者のルール',
-  6: '物語で頭に残る 宅建 宅建業法 第6巻 説明と契約のルール',
+  6: '物語で頭に残る 宅建 宅建業法 第6巻 説明と契約のルール',
 };
 function takkenReplyText(vol) {
   const v = vol || 1;
@@ -632,6 +635,27 @@ function takkenReplyText(vol) {
     '■ お預かりする情報について\n' +
     'お知らせをお送りするため、この合言葉をお送りいただいた方として記録しました。この記録は、発売のお知らせと、私の発信を見直すためだけに使います。\n' +
     'お知らせが不要になりましたら、このアカウントをブロックしていただければ送られなくなります。\n' +
+    '\n' +
+    'カツヤス'
+  );
+}
+
+// 【残価】『マンガでわかる 残価設定型住宅ローンの落とし穴』（2026-11-15）
+function zankaKeywordHit(text) {
+  return text.includes('残価') || text.includes('ざんか') || text.includes('ザンカ');
+}
+function zankaReplyText() {
+  return (
+    '合言葉、ありがとうございます。\n' +
+    '『マンガでわかる 残価設定型住宅ローンの落とし穴』を読んでいただき、ありがとうございます。\n' +
+    '\n' +
+    'こちらは、この本の読者の方への無料相談の受付です。\n' +
+    '\n' +
+    '住まいやローンのことで迷っていることを、そのままこのトークに書いて送ってください。お名前やご住所、口座番号などは書かないでください。\n' +
+    '\n' +
+    'カツヤスが、文字でお返事します。お返事まで数日いただくことがあります。\n' +
+    '\n' +
+    'お返事は、本と同じ考え方にもとづく一般的なご案内です。特定の金融商品や会社をお勧めしたり、評価したりするものではありません。実際の契約は、金融機関の書面と専門家の試算で確かめてください。\n' +
     '\n' +
     'カツヤス'
   );
@@ -712,6 +736,14 @@ function getReply(text, userName, userId) {
       zumenSession.end(userId);
       // return しない。この下の既存の合言葉カスケードにそのまま進む。
     }
+  }
+
+  // 【合言葉】『マンガでわかる 残価設定型住宅ローンの落とし穴』巻末の無料相談の受付（2026-11-15 オーナー承認）
+  // 合言葉: 「残価」「ざんか」「ザンカ」。配布物なし・人（カツヤス）が文字で返す（「図面」と同じ形）。
+  // 🔴 「相談」より先に判定する（「残価の相談です」と書かれても相談メニューに取られないように）。
+  //    「図面」の無料相談セッション中は上の intercept が先に返すので、ここには来ない。
+  if (zankaKeywordHit(text)) {
+    return { type: 'text', text: zankaReplyText() };
   }
 
   // 【最優先】オーナー自身のLINEユーザーID確認用（無料相談まわり以外のどの合言葉判定よりも先に判定する）
@@ -1732,6 +1764,11 @@ function classify(text, userId) {
     return 'step_reply';
   }
 
+  // 【残価】getReply() と同じ順（図面の無料相談まわりの直後・相談希望より前）で判定する
+  if (zankaKeywordHit(text)) {
+    return 'zanka_soudan';
+  }
+
   if (text.includes('相談希望') || text.includes('そうだん希望')) {
     return 'soudan_apply';
   }
@@ -1908,6 +1945,18 @@ function buildNonTextNotifyText(userName, msgType) {
 }
 
 // 『マンガ図面の向こう側』読者の無料相談通知の文面（2026-09-30追加）
+// 『マンガでわかる 残価設定型住宅ローンの落とし穴』の無料相談の受付通知（2026-11-15追加）
+function buildZankaNotifyText(userName, text) {
+  return (
+    '🏠 残価設定型住宅ローンの本の読者から無料相談\n\n' +
+    `お名前：${userName}\n` +
+    `受信：${nowJSTDisplay()}\n` +
+    `内容：${String(text).slice(0, 200)}\n\n` +
+    'LINEの公式アカウントのトークを開いて\n' +
+    '内容をご確認ください。'
+  );
+}
+
 function buildZumenNotifyText(userName) {
   return (
     '📐 図面の向こう側の読者から無料相談\n\n' +
