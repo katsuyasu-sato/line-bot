@@ -151,6 +151,8 @@ const ENTRY_RULES = [
   { label: '図面', test: (t) => /図面|ずめん|ズメン/.test(t) },
   // 2026-11-15『マンガでわかる 残価設定型住宅ローンの落とし穴』。index.js の getReply と同じく「相談」より先に判定する
   { label: '残価', test: (t) => /残価|ざんか|ザンカ/.test(t) },
+  // 2026-11-26『マンガでわかる 住宅ローン破綻』読者特典。index.js の getReply と同じく「相談」より先に判定する
+  { label: '確認リスト', test: (t) => /確認リスト|かくにんリスト|確認りすと|かくにんりすと|カクニンリスト/.test(t) },
   { label: '副業本', test: (t) => t.includes('副業') },
   { label: 'インスタ', test: (t) => /インスタ|instagram|Instagram/.test(t) },
   { label: 'note', test: (t) => t.includes('note') || t.includes('ノート') },

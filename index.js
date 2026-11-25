@@ -661,6 +661,75 @@ function zankaReplyText() {
   );
 }
 
+// 【確認リスト】『マンガでわかる 住宅ローン破綻』読者特典（2026-11-26 オーナー承認）
+// 読者の感想「確認リストが切り取って使える1ページになっていたら」を受けて作った印刷用A4・1枚。
+//   実体 : line-bot/public/kakunin_list_jutaku_loan.pdf
+//   原本 : GrowBookForge/output/jutaku-loan-hatan-manga/extras/kakunin_list/build.py で再生成
+const KAKUNIN_LIST_PDF_URL =
+  'https://kind-cooperation-production.up.railway.app/present/kakunin_list_jutaku_loan.pdf';
+function kakuninListKeywordHit(text) {
+  return (
+    text.includes('確認リスト') ||
+    text.includes('かくにんリスト') ||
+    text.includes('確認りすと') ||
+    text.includes('かくにんりすと') ||
+    text.includes('カクニンリスト')
+  );
+}
+function kakuninListMessages() {
+  return [
+    {
+      type: 'text',
+      text:
+        '合言葉、ありがとうございます。\n' +
+        '『マンガでわかる 住宅ローン破綻』を読んでいただき、ありがとうございます。\n' +
+        '\n' +
+        'お約束の「わが家の住宅ローン 確認リスト」（A4・1枚）をお届けします。拓也さんと彩さんが冷蔵庫に貼ったリストを、ご家庭で書き込めるようにしたものです。\n' +
+        '\n' +
+        '下のボタンからPDFを開いて、印刷してお使いください。返済予定表を見ながら、ご家族で一緒に書き込んでみてください。\n' +
+        '\n' +
+        'ご自身のローンのことで迷ったときは、このトークに「相談」とお送りください。\n' +
+        '\n' +
+        'カツヤス',
+    },
+    {
+      type: 'flex',
+      altText: '「わが家の住宅ローン 確認リスト」（PDF版）をお届けします',
+      contents: {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '🏠 わが家の住宅ローン 確認リスト', weight: 'bold', size: 'md', color: '#1d3a5f', wrap: true },
+            { type: 'separator', margin: 'md' },
+            {
+              type: 'text',
+              text: '印刷用のPDF（A4・1枚）です。金利・元金・団信など6つの項目を書き込めます。銀行から金利の通知が届いたら、見直してみてください。',
+              wrap: true,
+              margin: 'md',
+              size: 'sm',
+            },
+          ],
+          paddingAll: '20px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'button',
+              action: { type: 'uri', label: '📋 確認リスト（PDF）を開く', uri: KAKUNIN_LIST_PDF_URL },
+              style: 'primary',
+              color: '#1d3a5f',
+            },
+          ],
+        },
+      },
+    },
+  ];
+}
+
 function getReply(text, userName, userId) {
 
   // 【合言葉】『マンガ図面の向こう側』（ASIN B0GGBV5D59）と、そのリメイク『図面は楽譜だ』
@@ -744,6 +813,13 @@ function getReply(text, userName, userId) {
   //    「図面」の無料相談セッション中は上の intercept が先に返すので、ここには来ない。
   if (zankaKeywordHit(text)) {
     return { type: 'text', text: zankaReplyText() };
+  }
+
+  // 【合言葉】『マンガでわかる 住宅ローン破綻』読者特典「わが家の住宅ローン 確認リスト」（2026-11-26 オーナー承認）
+  // 合言葉: 「確認リスト」ほか表記ゆれ。テキスト本文＋PDF版ボタン（Flex）の2通で返す（「体の点検」と同じ形）。
+  // 🔴 「相談」より先に判定する（「確認リストと相談」のように書かれても特典が渡るように）。
+  if (kakuninListKeywordHit(text)) {
+    return kakuninListMessages();
   }
 
   // 【最優先】オーナー自身のLINEユーザーID確認用（無料相談まわり以外のどの合言葉判定よりも先に判定する）
